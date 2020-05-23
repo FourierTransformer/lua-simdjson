@@ -90,7 +90,11 @@ I ran some benchmarks against lua-cjson, rapidjson, and dkjson. For each test, I
 
 ![Lua Performance Column Chart](benchmark/lua-perf.png)
 
+I also calculated the throughput for each of the files to show how it may affect real-world performance. You can also find a LuaJIT version in the benchmarks folder
 
+![Lua Throughput Performance Chart](benchamrk/lua-throughput.png)
+
+All tested files are in the [jsonexamples folder](jsonexamples/).
 
 ## Caveats & Alternatives
  * there is no encoding/dumping a lua table to JSON (yet! Most other lua JSON libraries can handle this)
