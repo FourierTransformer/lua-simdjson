@@ -86,7 +86,11 @@ This lazy style of using the simdjson data structure could also be used with arr
 lua-simdjson will error out with any errors from simdjson encountered while parsing. They are very good at helping identify what has gone wrong during parsing.
 
 ## Benchmarks
-TODO: add some benchmarks
+I ran some benchmarks against lua-cjson, rapidjson, and dkjson. For each test, I loaded the JSON into memory, and then had the parsers go through each file 100 times and took the average time it took to parse. You can see all the results in the [benchmark](benchmark/) folder. I've included a sample output run via Lua (the LuaJIT graph looks very similar, also in the benchmark folder). The y-axis is logarithmic, so every half step down is twice as fast.
+
+![Lua Performance Column Chart](benchmark/lua-perf.png)
+
+
 
 ## Caveats & Alternatives
  * there is no encoding/dumping a lua table to JSON (yet! Most other lua JSON libraries can handle this)

@@ -1,0 +1,157 @@
+jsonexamples/apache_builds.json	Bytes: 127275
+simd	0.00041906
+cjson	0.00047899
+dkjson	0.00375418
+rapidjson	0.00054689
+
+jsonexamples/canada.json	Bytes: 2251051
+simd	0.01340417
+cjson	0.02484794
+dkjson	0.11459856
+rapidjson	0.01377929
+
+jsonexamples/citm_catalog.json	Bytes: 1727204
+simd	0.0046203999999999
+cjson	0.0059531399999995
+dkjson	0.03971234
+rapidjson	0.0057837999999999
+
+jsonexamples/github_events.json	Bytes: 65132
+simd	0.00017420000000001
+cjson	0.00026015000000001
+dkjson	0.0017177699999999
+rapidjson	0.00026594000000003
+
+jsonexamples/google_maps_api_compact_response.json	Bytes: 11812
+simd	9.3019999999946e-05
+cjson	0.00011022999999998
+dkjson	0.00072163999999979
+rapidjson	0.00011087999999976
+
+jsonexamples/google_maps_api_response.json	Bytes: 26102
+simd	9.359000000007e-05
+cjson	0.00011992000000006
+dkjson	0.00086761999999986
+rapidjson	0.00011955000000036
+
+jsonexamples/gsoc-2018.json	Bytes: 3327831
+simd	0.0036615000000002
+cjson	0.0079303200000001
+dkjson	0.05620034
+rapidjson	0.0085950099999999
+
+jsonexamples/instruments.json	Bytes: 220346
+simd	0.00073130000000045
+cjson	0.00099552999999993
+dkjson	0.0072374900000002
+rapidjson	0.00089188999999973
+
+jsonexamples/marine_ik.json	Bytes: 2983466
+simd	0.01905242
+cjson	0.03219801
+dkjson	0.17204658
+rapidjson	0.01790118
+
+jsonexamples/mesh.json	Bytes: 723597
+simd	0.0030518899999998
+cjson	0.0068585
+dkjson	0.03934749
+rapidjson	0.0028935100000002
+
+jsonexamples/mesh.pretty.json	Bytes: 1577353
+simd	0.0033689700000002
+cjson	0.00749402
+dkjson	0.04824711
+rapidjson	0.0035742200000001
+
+jsonexamples/numbers.json	Bytes: 150124
+simd	0.00038534000000055
+cjson	0.0012750300000002
+dkjson	0.0069491099999999
+rapidjson	0.00042266999999995
+
+jsonexamples/random.json	Bytes: 510476
+simd	0.0053963599999992
+cjson	0.0063132299999998
+dkjson	0.02708656
+rapidjson	0.0064241099999998
+
+jsonexamples/repeat.json	Bytes: 11356
+simd	2.3129999999298e-05
+cjson	5.3099999999517e-05
+dkjson	0.00029982000000004
+rapidjson	3.9289999999426e-05
+
+jsonexamples/twitter_api_compact_response.json	Bytes: 10075
+simd	3.9180000000414e-05
+cjson	5.6220000000593e-05
+dkjson	0.00035584000000014
+rapidjson	5.3509999999761e-05
+
+jsonexamples/twitter_api_response.json	Bytes: 15253
+simd	4.5070000000322e-05
+cjson	6.9870000000236e-05
+dkjson	0.0004485200000002
+rapidjson	6.8559999999849e-05
+
+jsonexamples/twitterescaped.json	Bytes: 562408
+simd	0.0018878200000002
+cjson	0.0028480699999997
+dkjson	0.021310989999999
+rapidjson	0.0027041600000008
+
+jsonexamples/twitter.json	Bytes: 631515
+simd	0.0016582000000004
+cjson	0.0027549000000006
+dkjson	0.01808028
+rapidjson	0.0026233600000003
+
+jsonexamples/twitter_timeline.json	Bytes: 42233
+simd	0.00018965999999978
+cjson	0.00025714000000008
+dkjson	0.0017159500000004
+rapidjson	0.00024540999999942
+
+jsonexamples/update-center.json	Bytes: 533178
+simd	0.0026317400000001
+cjson	0.0033273200000001
+dkjson	0.01943046
+rapidjson	0.0035871300000004
+
+jsonexamples/small/adversarial.json	Bytes: 80
+simd	1.6099999999142e-06
+cjson	1.2900000002958e-06
+dkjson	4.8600000000931e-06
+rapidjson	1.2099999997872e-06
+
+jsonexamples/small/demo.json	Bytes: 387
+simd	2.3799999999596e-06
+cjson	2.4299999994071e-06
+dkjson	1.2600000000305e-05
+rapidjson	2.0900000001234e-06
+
+jsonexamples/small/flatadversarial.json	Bytes: 64
+simd	1.5399999993804e-06
+cjson	1.240000000422e-06
+dkjson	4.7399999999698e-06
+rapidjson	1.1400000001061e-06
+
+jsonexamples/small/smalldemo.json	Bytes: 204
+simd	2.200000000272e-06
+cjson	2.1300000004487e-06
+dkjson	1.0560000000197e-05
+rapidjson	1.8999999994662e-06
+
+jsonexamples/small/truenull.json	Bytes: 12000
+simd	5.1820000000333e-05
+cjson	0.00010223000000067
+dkjson	0.00071542999999991
+rapidjson	3.5309999999669e-05
+
+Totals:
+{
+  cjson = 0.10431095,
+  dkjson = 0.58087684,
+  rapidjson = 0.070672009999999,
+  simdjson = 0.06098657
+}
