@@ -124,6 +124,17 @@ static int parse_file(lua_State *L)
     return 1;
 }
 
+static int active_implementation(lua_State *L)
+{
+    std::string name = simdjson::active_implementation->name();
+    std::string description = simdjson::active_implementation->description();
+    std::string implementation_name = name + " (" + description + ")";
+
+    lua_pushlstring(L, implementation_name.data(), implementation_name.size());
+
+    return 1;
+}
+
 // ParsedObject as C++ class
 #define LUA_MYOBJECT "ParsedObject"
 class ParsedObject{

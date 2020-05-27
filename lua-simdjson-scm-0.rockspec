@@ -5,9 +5,9 @@ source = {
    tag = "0.0.0"
 }
 description = {
-   summary = "This is a simple Lua library for packing and unpacking binary data",
+   summary = "This is a simple Lua binding for simdjson",
    detailed = [[
-      This is a simple Lua library for packing and unpacking binary data.
+      This is a c++ binding to simdjson for parsing JSON very quickly.
    ]],
    homepage = "https://github.com/FourierTransformer/lua-simdjson",
    license = "Apache-2.0"
