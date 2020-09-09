@@ -36,17 +36,23 @@ void convert_element_to_table(lua_State *L, dom::element element) {
   switch (element.type()) {
     case dom::element_type::ARRAY:
       {
-          int count = 1;
+          int count = 0;
           lua_newtable(L);
+          lua_getglobal(L, "_hx_array_mt");
+          lua_setmetatable(L, 2);
           for (dom::element child : dom::array(element)) {
             lua_pushinteger(L, count);
             convert_element_to_table(L, child);
-            lua_settable(L, -3);
+
+            lua_rawset(L, -3);
             count = count + 1;
           }
+          lua_pushstring(L, "length");
+          lua_pushnumber(L, count);
+          lua_rawset(L, -3);
           break;
       }
-    
+
     case dom::element_type::OBJECT:
       lua_newtable(L);
       for (dom::key_value_pair field : dom::object(element)) {
@@ -58,7 +64,7 @@ void convert_element_to_table(lua_State *L, dom::element element) {
         lua_settable(L, -3);
       }
       break;
-    
+
     case dom::element_type::INT64:
       lua_pushinteger(L, int64_t(element));
       break;
@@ -66,7 +72,7 @@ void convert_element_to_table(lua_State *L, dom::element element) {
     case dom::element_type::UINT64:
       lua_pushinteger(L, int64_t(element));
       break;
-    
+
     case dom::element_type::DOUBLE:
       lua_pushnumber(L, double(element));
       break;
@@ -81,7 +87,7 @@ void convert_element_to_table(lua_State *L, dom::element element) {
     case dom::element_type::BOOL:
       lua_pushboolean(L, bool(element));
       break;
-    
+
     case dom::element_type::NULL_VALUE:
       lua_pushlightuserdata(L, NULL);
       break;
@@ -192,7 +198,7 @@ static int ParsedObject_open_file(lua_State *L)
 
 static int ParsedObject_at(lua_State *L) {
     dom::document* document = (*reinterpret_cast<ParsedObject**>(luaL_checkudata(L, 1, LUA_MYOBJECT)))->get();
-    const char *pointer = luaL_checkstring(L, 2);    
+    const char *pointer = luaL_checkstring(L, 2);
 
     dom::element returned_element;
     simdjson::error_code error;
@@ -240,6 +246,6 @@ int luaopen_simdjson (lua_State *L) {
     lua_setfield(L, -2, "_NAME");
     lua_pushliteral(L, LUA_SIMDJSON_VERSION);
     lua_setfield(L, -2, "_VERSION");
-    
+
     return 1;
 }
