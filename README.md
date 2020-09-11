@@ -98,6 +98,8 @@ I also calculated the throughput for each of the files to show how it may affect
 
 All tested files are in the [jsonexamples folder](jsonexamples/).
 
+lua-simdjson, like the simdjson library performs better on more modern hardware. These benchmarks were run on a ninth-gen i7 processor. On an older processor, rapidjson may perform better.
+
 ## Caveats & Alternatives
  * there is no encoding/dumping a lua table to JSON (yet! Most other lua JSON libraries can handle this)
  * it only works on 64 bit systems (untested on Windows...)
