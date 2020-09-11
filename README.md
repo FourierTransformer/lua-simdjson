@@ -3,7 +3,7 @@
 
 A basic lua binding to [simdjson](https://simdjson.org). The simdjson library is an incredibly fast JSON parser that uses SIMD instructions and fancy algorithms to parse JSON very quickly. It's been tested with LuaJIT 2.0/2.1 and Lua 5.1, 5.2, 5.3, and 5.4 on linux/osx. It has a general parsing mode and a lazy mode that uses a JSON pointer.
 
-Current simdjson version: 0.3.1
+Current simdjson version: 0.5.0
 
 ## Requirements
  * lua-simdjson only works on 64bit systems.
@@ -71,16 +71,18 @@ local response = simdjson.open([[
     }
 }
 ]])
-print(response:at("Image/Width"))
+print(response:atPointer("/Image/Width"))
 
 -- OR to parse a file from disk
 local fileResponse = simdjson.open("jsonexamples/twitter.json")
-print(fileResponse:at("statuses/0/id")) --using a JSON pointer
+print(fileResponse:atPointer("/statuses/0/id")) --using a JSON pointer
 
 ```
+Starting with version 0.5.0, the the `atPointer` method is JSON pointer compliant. The previous pointer implementation is considered deprecated, but is still available with the `at` method.
+
 The `open` and `parse` codeblocks should print out the same values. It's worth noting that the JSON pointer indexes from 0.
 
-This lazy style of using the simdjson data structure could also be used with array access in the future, and would result in ultra-fast JSON parsing.
+This lazy style of using the simdjson data structure could also be used with array access in the future, and would result in ultra-fast JSON "parsing".
 
 ## Error Handling
 lua-simdjson will error out with any errors from simdjson encountered while parsing. They are very good at helping identify what has gone wrong during parsing.
@@ -95,6 +97,8 @@ I also calculated the throughput for each of the files to show how it may affect
 ![Lua Throughput Performance Chart](benchmark/lua-throughput.png)
 
 All tested files are in the [jsonexamples folder](jsonexamples/).
+
+lua-simdjson, like the simdjson library performs better on more modern hardware. These benchmarks were run on a ninth-gen i7 processor. On an older processor, rapidjson may perform better.
 
 ## Caveats & Alternatives
  * there is no encoding/dumping a lua table to JSON (yet! Most other lua JSON libraries can handle this)
