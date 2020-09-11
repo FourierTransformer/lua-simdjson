@@ -71,16 +71,18 @@ local response = simdjson.open([[
     }
 }
 ]])
-print(response:at("Image/Width"))
+print(response:atPointer("/Image/Width"))
 
 -- OR to parse a file from disk
 local fileResponse = simdjson.open("jsonexamples/twitter.json")
-print(fileResponse:at("statuses/0/id")) --using a JSON pointer
+print(fileResponse:atPointer("/statuses/0/id")) --using a JSON pointer
 
 ```
+Starting with version 0.5.0, the the `atPointer` method is JSON pointer compliant. The previous pointer implementation is considered deprecated, but is still available with the `at` method.
+
 The `open` and `parse` codeblocks should print out the same values. It's worth noting that the JSON pointer indexes from 0.
 
-This lazy style of using the simdjson data structure could also be used with array access in the future, and would result in ultra-fast JSON parsing.
+This lazy style of using the simdjson data structure could also be used with array access in the future, and would result in ultra-fast JSON "parsing".
 
 ## Error Handling
 lua-simdjson will error out with any errors from simdjson encountered while parsing. They are very good at helping identify what has gone wrong during parsing.

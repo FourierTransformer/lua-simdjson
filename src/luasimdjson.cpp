@@ -210,6 +210,26 @@ static int ParsedObject_at(lua_State *L) {
     return 1;
 }
 
+static int ParsedObject_atPointer(lua_State *L) {
+    dom::document* document = (*reinterpret_cast<ParsedObject**>(luaL_checkudata(L, 1, LUA_MYOBJECT)))->get();
+    const char *pointer = luaL_checkstring(L, 2);    
+
+    dom::element returned_element;
+    simdjson::error_code error;
+
+    dom::element element = document->root();
+
+    element.at_pointer(pointer).tie(returned_element, error);
+    if (error) {
+        luaL_error(L, error_message(error));
+        return 1;
+    }
+
+    convert_element_to_table(L, returned_element);
+
+    return 1;
+}
+
 static int ParsedObject_newindex(lua_State *L) {
     luaL_error(L, "This should be treated as a read-only table. We may one day add array access for the elements, and it'll likely not be modifiable.");
     return 1;
@@ -217,6 +237,7 @@ static int ParsedObject_newindex(lua_State *L) {
 
 static const struct luaL_Reg arraylib_m [] = {
     {"at", ParsedObject_at},
+    {"atPointer", ParsedObject_atPointer},
     {"__newindex", ParsedObject_newindex},
     {"__gc", ParsedObject_delete},
     {NULL, NULL}
