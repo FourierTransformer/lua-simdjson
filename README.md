@@ -5,6 +5,14 @@ A basic lua binding to [simdjson](https://simdjson.org). The simdjson library is
 
 Current simdjson version: 0.5.0
 
+## Installation
+If all the requirements are met, lua-simdjson can be install via luarocks with:
+
+```
+luarocks install lua-simdjson
+```
+Otherwise it can be installed manually by pulling the repo and running luarocks make.
+
 ## Requirements
  * lua-simdjson only works on 64bit systems.
  * a lua build environment with support for C++11
