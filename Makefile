@@ -2,7 +2,7 @@ SRC = src/luasimdjson.cpp src/simdjson.cpp
 INCLUDE = -I$(LUA_INCDIR)
 LIBS_PATH = -L$(LUA_LIBDIR)
 LIBS = -lpthread
-FLAGS = -std=c++11 -Wall $(LIBFLAG) $(CFLAGS)
+FLAGS = -std=c++11 -Wall -O3 $(LIBFLAG) $(CFLAGS)
 
 all: simdjson.so
 
