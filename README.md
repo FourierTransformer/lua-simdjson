@@ -3,7 +3,7 @@
 
 A basic lua binding to [simdjson](https://simdjson.org). The simdjson library is an incredibly fast JSON parser that uses SIMD instructions and fancy algorithms to parse JSON very quickly. It's been tested with LuaJIT 2.0/2.1 and Lua 5.1, 5.2, 5.3, and 5.4 on linux/osx. It has a general parsing mode and a lazy mode that uses a JSON pointer.
 
-Current simdjson version: 0.5.0
+Current simdjson version: 3.3.0
 
 ## Installation
 If all the requirements are met, lua-simdjson can be install via luarocks with:
@@ -82,7 +82,7 @@ local response = simdjson.open([[
 print(response:atPointer("/Image/Width"))
 
 -- OR to parse a file from disk
-local fileResponse = simdjson.open("jsonexamples/twitter.json")
+local fileResponse = simdjson.openFile("jsonexamples/twitter.json")
 print(fileResponse:atPointer("/statuses/0/id")) --using a JSON pointer
 
 ```

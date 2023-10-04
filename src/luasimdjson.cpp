@@ -126,9 +126,10 @@ static int parse_file(lua_State *L)
 
 static int active_implementation(lua_State *L)
 {
-    std::string name = simdjson::active_implementation->name();
-    std::string description = simdjson::active_implementation->description();
-    std::string implementation_name = name + " (" + description + ")";
+    const auto& implementation = simdjson::get_active_implementation();
+    const std::string name = implementation->name();
+    const std::string description = implementation->description();
+    const std::string implementation_name = name + " (" + description + ")";
 
     lua_pushlstring(L, implementation_name.data(), implementation_name.size());
 

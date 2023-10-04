@@ -34,11 +34,44 @@ local files = {
 	"small/truenull.json"
 }
 
-describe("Make sure everything compiled correctly", function()
+describe("Make sure it parses strings correctly", function()
 	for _, file in ipairs(files) do
 		it("should parse the file: " .. file, function()
 			local fileContents = loadFile("jsonexamples/" .. file)
-			assert.are.same(cjson.decode(fileContents), simdjson.parse(fileContents))
+			local cjsonDecodedValues = cjson.decode(fileContents)
+			assert.are.same(cjsonDecodedValues, simdjson.parse(fileContents))
 		end)
 	end
 end)
+
+describe("Make sure it parses files correctly", function()
+	for _, file in ipairs(files) do
+		it("should parse the file: " .. file, function()
+			local fileContents = loadFile("jsonexamples/" .. file)
+			local cjsonDecodedValues = cjson.decode(fileContents)
+			assert.are.same(cjsonDecodedValues, simdjson.parseFile("jsonexamples/" .. file))
+		end)
+	end
+end)
+
+describe("Make sure json pointer works with a string", function()
+	it("should handle a string", function()
+		local fileContents = loadFile("jsonexamples/small/demo.json")
+		local decodedFile = simdjson.open(fileContents)
+		assert.are.same(800, decodedFile:atPointer("/Image/Width"))
+		assert.are.same(600, decodedFile:atPointer("/Image/Height"))
+		assert.are.same(125, decodedFile:atPointer("/Image/Thumbnail/Height"))
+		assert.are.same(943, decodedFile:atPointer("/Image/IDs/1"))
+	end)
+end)
+
+describe("Make sure json pointer works with openfile", function()
+	it("should handle opening a file", function()
+		local decodedFile = simdjson.openFile("jsonexamples/small/demo.json")
+		assert.are.same(800, decodedFile:atPointer("/Image/Width"))
+		assert.are.same(600, decodedFile:atPointer("/Image/Height"))
+		assert.are.same(125, decodedFile:atPointer("/Image/Thumbnail/Height"))
+		assert.are.same(943, decodedFile:atPointer("/Image/IDs/1"))
+	end)
+end)
+
