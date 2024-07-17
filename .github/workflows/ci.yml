@@ -7,9 +7,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-13]
+        os: [linux, macos]
         lua: [lua=5.1, lua=5.2, lua=5.3, lua=5.4, luajit=2.0, luajit=2.1]
-    runs-on: ${{ matrix.os }}
+        include:
+        - os: linux
+          runner: ubuntu-22.04
+        - os: macos
+          runner: macos-13
+    name: ${{ matrix.os }} (${{ matrix.lua }})
+    runs-on: ${{ matrix.runner }}
     steps:
       # Checks-out the repository under $GITHUB_WORKSPACE.
       - uses: actions/checkout@v3
