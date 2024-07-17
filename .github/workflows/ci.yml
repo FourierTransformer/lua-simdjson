@@ -54,6 +54,6 @@ jobs:
       - name: Run tests
         run: |
           .\lua_install\bin\activate
-          luarocks install lua-cjson2
-          luarocks install busted
+          luarocks install MSVCRT="m" lua-cjson2
+          luarocks install MSVCRT="m" busted
           busted --verbose
