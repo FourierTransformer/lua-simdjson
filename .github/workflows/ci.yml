@@ -19,6 +19,8 @@ jobs:
           hererocks lua_install -r^ --${{ matrix.lua }}
           export PATH=$PATH:$PWD/lua_install/bin
           luarocks install lua-cjson2
+        env:
+          MACOSX_DEPLOYMENT_TARGET: 11.0
       - name: Build lua-simdjson
         run: |
           export PATH=$PATH:$PWD/lua_install/bin
