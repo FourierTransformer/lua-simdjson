@@ -32,4 +32,12 @@ build = {
       INST_LUADIR="$(LUADIR)",
       INST_CONFDIR="$(CONFDIR)",
    },
+   platforms = {
+      windows = {
+         build_variables = {
+            LUA_LIBDIR="$(LUA_LIBDIR)",
+            LUALIB="$(LUALIB)",
+         }
+      }
+   }
 }
