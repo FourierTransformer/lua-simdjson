@@ -7,13 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - lua: lua=5.1
-          - lua: lua=5.2
-          - lua: lua=5.3
-          - lua: lua=5.4
-          - lua: luajit=2.0
-          - lua: luajit=2.1
+        lua: [lua=5.1, lua=5.2, lua=5.3, lua=5.4, luajit=2.0, luajit=2.1]
     runs-on: ubuntu-22.04
     steps:
       # Checks-out the repository under $GITHUB_WORKSPACE.
