@@ -7,14 +7,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        os: [linux, macos]
+        lua: [lua=5.1, lua=5.2, lua=5.3, lua=5.4, luajit=2.0, luajit=2.1]
         include:
-          - lua: lua=5.1
-          - lua: lua=5.2
-          - lua: lua=5.3
-          - lua: lua=5.4
-          - lua: luajit=2.0
-          - lua: luajit=2.1
-    runs-on: ubuntu-22.04
+        - os: linux
+          runner: ubuntu-22.04
+        - os: macos
+          runner: macos-13
+    name: ${{ matrix.os }} (${{ matrix.lua }})
+    runs-on: ${{ matrix.runner }}
     steps:
       # Checks-out the repository under $GITHUB_WORKSPACE.
       - uses: actions/checkout@v3
@@ -22,15 +23,16 @@ jobs:
         run: |
           pip install hererocks
           hererocks lua_install -r^ --${{ matrix.lua }}
-          export PATH=$PATH:$PWD/lua_install/bin
-          luarocks install lua-cjson2
+        env:
+          MACOSX_DEPLOYMENT_TARGET: 11.0
       - name: Build lua-simdjson
         run: |
-          export PATH=$PATH:$PWD/lua_install/bin
+          source lua_install/bin/activate
           luarocks make
       - name: Run tests
         run: |
-          export PATH=$PATH:$PWD/lua_install/bin
+          source lua_install/bin/activate
+          luarocks install lua-cjson2
           luarocks install busted
           busted --verbose
 
