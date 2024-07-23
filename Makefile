@@ -3,13 +3,32 @@ INCLUDE = -I$(LUA_INCDIR)
 LIBS = -lpthread
 FLAGS = -std=c++11 -Wall $(LIBFLAG) $(CFLAGS)
 
-all: simdjson.so
+ifdef LUA_LIBDIR
+FLAGS += $(LUA_LIBDIR)/$(LUALIB)
+endif
 
-simdjson.so:
-	$(CXX) $(SRC) $(FLAGS) $(INCLUDE) $(LIBS) -o $@
+ifeq ($(OS),Windows_NT)
+	LIBEXT = dll
+else
+	UNAME := $(shell uname -s)
+	ifeq ($(findstring MINGW,$(UNAME)),MINGW)
+		LIBEXT = dll
+	else ifeq ($(findstring CYGWIN,$(UNAME)),CYGWIN)
+		LIBEXT = dll
+	else
+		LIBEXT = so
+	endif
+endif
+
+TARGET = simdjson.$(LIBEXT)
+
+all: $(TARGET)
+
+$(TARGET):
+	$(CXX) $(SRC) $(FLAGS) $(INCLUDE) $(LIBS_PATH) $(LIBS) -o $@
 
 clean:
-	rm *.so
+	rm *.$(LIBEXT)
 
-install: simdjson.so
-	cp simdjson.so $(INST_LIBDIR)
+install: $(TARGET)
+	cp $(TARGET) $(INST_LIBDIR)

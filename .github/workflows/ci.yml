@@ -35,3 +35,27 @@ jobs:
           luarocks install lua-cjson2
           luarocks install busted
           busted --verbose
+
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        lua: [lua=5.1, lua=5.2, lua=5.3, lua=5.4, luajit=2.0, luajit=2.1]
+    runs-on: windows-2022
+    steps:
+      # Checks-out the repository under $GITHUB_WORKSPACE.
+      - uses: actions/checkout@v3
+      - name: Install Lua (${{ matrix.lua }})
+        run: |
+          pip install hererocks
+          hererocks lua_install -r^ --${{ matrix.lua }}
+      - name: Build lua-simdjson
+        run: |
+          .\lua_install\bin\activate
+          luarocks make
+      - name: Run tests
+        run: |
+          .\lua_install\bin\activate
+          luarocks install MSVCRT="m" lua-cjson2
+          luarocks install MSVCRT="m" busted
+          busted --verbose
