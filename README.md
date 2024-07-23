@@ -1,5 +1,5 @@
 # lua-simdjson (WIP)
-[![Build Status](https://travis-ci.org/FourierTransformer/lua-simdjson.svg?branch=master)](https://travis-ci.org/FourierTransformer/lua-simdjson)
+![Build Status](https://github.com/FourierTransformer/lua-simdjson/actions/workflows/ci.yml/badge.svg?branch=master)
 
 A basic lua binding to [simdjson](https://simdjson.org). The simdjson library is an incredibly fast JSON parser that uses SIMD instructions and fancy algorithms to parse JSON very quickly. It's been tested with LuaJIT 2.0/2.1 and Lua 5.1, 5.2, 5.3, and 5.4 on linux/osx. It has a general parsing mode and a lazy mode that uses a JSON pointer.
 
