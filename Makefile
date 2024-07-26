@@ -1,7 +1,7 @@
 SRC = src/luasimdjson.cpp src/simdjson.cpp
 INCLUDE = -I$(LUA_INCDIR)
 LIBS = -lpthread
-FLAGS = -std=c++11 -Wall $(LIBFLAG) $(CFLAGS)
+FLAGS = -std=c++11 -Wall -g $(LIBFLAG) $(CFLAGS)
 
 ifdef LUA_LIBDIR
 FLAGS += $(LUA_LIBDIR)/$(LUALIB)

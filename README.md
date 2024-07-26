@@ -3,7 +3,7 @@
 
 A basic lua binding to [simdjson](https://simdjson.org). The simdjson library is an incredibly fast JSON parser that uses SIMD instructions and fancy algorithms to parse JSON very quickly. It's been tested with LuaJIT 2.0/2.1 and Lua 5.1, 5.2, 5.3, and 5.4 on linux/osx. It has a general parsing mode and a lazy mode that uses a JSON pointer.
 
-Current simdjson version: 0.5.0
+Current simdjson version: 3.9.5
 
 ## Installation
 If all the requirements are met, lua-simdjson can be install via luarocks with:
@@ -36,7 +36,7 @@ The `parse` methods will return a normal lua table that can be interacted with.
 ```lua
 local simdjson = require("simdjson")
 local response = simdjson.parse([[
-{ 
+{
     "Image": {
         "Width":  800,
         "Height": 600,
@@ -64,7 +64,7 @@ The `open` methods currently require the use of a JSON pointer, but are very qui
 ```lua
 local simdjson = require("simdjson")
 local response = simdjson.open([[
-{ 
+{
     "Image": {
         "Width":  800,
         "Height": 600,
@@ -82,7 +82,7 @@ local response = simdjson.open([[
 print(response:atPointer("/Image/Width"))
 
 -- OR to parse a file from disk
-local fileResponse = simdjson.open("jsonexamples/twitter.json")
+local fileResponse = simdjson.openFile("jsonexamples/twitter.json")
 print(fileResponse:atPointer("/statuses/0/id")) --using a JSON pointer
 
 ```
@@ -115,7 +115,7 @@ lua-simdjson, like the simdjson library performs better on more modern hardware.
  * since it's an external module, it's not quite as easy to just grab the file and go (dkjson has you covered here!)
 
 ## Philosophy
-I plan to keep it fairly inline with what the original simdjson library is capable of doing, which really means not adding too many additional options. The big _thing_ that's missing so far is encoding a lua table to JSON. I may add in an encoder at some point (likely modified from an existing lua library). There are some rumours that simdjson _may_ support creating JSON structure in the future. If that happens, I would likely switch to it. 
+I plan to keep it fairly inline with what the original simdjson library is capable of doing, which really means not adding too many additional options. The big _thing_ that's missing so far is encoding a lua table to JSON. I may add in an encoder at some point (likely modified from an existing lua library). There are some rumours that simdjson _may_ support creating JSON structure in the future. If that happens, I would likely switch to it.
 
 ## Licenses
  * The jsonexamples, src/simdjson.cpp, src/simdjson.h are unmodified from the released version simdjson under the Apache License 2.0.

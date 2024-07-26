@@ -1,14 +1,16 @@
 #include <lua.hpp>
 #include <lauxlib.h>
 
+#define NDEBUG
+#define __OPTIMIZE__ 1
+
 #include "simdjson.h"
 #include "luasimdjson.h"
 
 #define LUA_SIMDJSON_NAME       "simdjson"
-#define LUA_SIMDJSON_VERSION    "0.0"
+#define LUA_SIMDJSON_VERSION    "0.0.3"
 
 using namespace simdjson;
-
 
 #if !defined(luaL_newlibtable) && (!defined LUA_VERSION_NUM || LUA_VERSION_NUM<=501)
 /*
@@ -30,59 +32,53 @@ static void luaL_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 }
 #endif
 
-static simdjson::dom::parser parser;
+static ondemand::parser ondemand_parser;
 
-void convert_element_to_table(lua_State *L, dom::element element) {
+void convert_ondemand_element_to_table(lua_State *L, ondemand::value element) {
   switch (element.type()) {
-    case dom::element_type::ARRAY:
+
+    case ondemand::json_type::array:
       {
           int count = 1;
           lua_newtable(L);
-          for (dom::element child : dom::array(element)) {
-            lua_pushinteger(L, count);
-            convert_element_to_table(L, child);
-            lua_settable(L, -3);
-            count = count + 1;
-          }
-          break;
+
+            for (auto child : element.get_array()) {
+              lua_pushinteger(L, count);
+              // We need the call to value() to get
+              // an ondemand::value type.
+              convert_ondemand_element_to_table(L, child.value());
+              lua_settable(L, -3);
+              count = count + 1;
+            }
+            break;
       }
-    
-    case dom::element_type::OBJECT:
+
+    case ondemand::json_type::object:
       lua_newtable(L);
-      for (dom::key_value_pair field : dom::object(element)) {
-
-        std::string_view view(field.key);
-        lua_pushlstring(L, view.data(), view.size());
-
-        convert_element_to_table(L, field.value);
+      for (auto field : element.get_object()) {
+        std::string_view s = field.unescaped_key();
+        lua_pushlstring(L, s.data(), s.size());
+        convert_ondemand_element_to_table(L, field.value());
         lua_settable(L, -3);
       }
       break;
-    
-    case dom::element_type::INT64:
-      lua_pushinteger(L, int64_t(element));
+
+    case ondemand::json_type::number:
+      lua_pushnumber(L, element.get_double());
       break;
 
-    case dom::element_type::UINT64:
-      lua_pushinteger(L, int64_t(element));
-      break;
-    
-    case dom::element_type::DOUBLE:
-      lua_pushnumber(L, double(element));
-      break;
-
-    case dom::element_type::STRING:
+    case ondemand::json_type::string:
       {
-        std::string_view view(element);
-        lua_pushlstring(L, view.data(), view.size());
+        std::string_view s = element.get_string();
+        lua_pushlstring(L, s.data(), s.size());
         break;
       }
 
-    case dom::element_type::BOOL:
-      lua_pushboolean(L, bool(element));
+    case ondemand::json_type::boolean:
+      lua_pushboolean(L, element.get_bool());
       break;
-    
-    case dom::element_type::NULL_VALUE:
+
+    case ondemand::json_type::null:
       lua_pushlightuserdata(L, NULL);
       break;
   }
@@ -93,16 +89,17 @@ static int parse(lua_State *L)
     size_t json_str_len;
     const char *json_str = luaL_checklstring(L, 1, &json_str_len);
 
-    dom::element element;
-    simdjson::error_code error;
-    parser.parse(json_str, json_str_len).tie(element, error);
+    ondemand::document doc;
+    ondemand::value element;
 
-    if (error) {
-        luaL_error(L, error_message(error));
-        return 1;
+    try {
+        // makes a padded_string_view for a bit of quickness!
+        doc = ondemand_parser.iterate(json_str, json_str_len, json_str_len + SIMDJSON_PADDING);
+        element = doc;
+        convert_ondemand_element_to_table(L, element);
+    } catch (simdjson::simdjson_error &error) {
+        luaL_error(L, error.what());
     }
-
-    convert_element_to_table(L, element);
 
     return 1;
 }
@@ -111,39 +108,119 @@ static int parse_file(lua_State *L)
 {
     const char *json_file = luaL_checkstring(L, 1);
 
-    dom::element element;
-    simdjson::error_code error;
-    parser.load(json_file).tie(element, error);
+    padded_string json_string;
+    ondemand::document doc;
+    ondemand::value element;
 
-    if (error) {
-        luaL_error(L, error_message(error));
-        return 1;
+    try {
+        json_string = padded_string::load(json_file);
+        doc = ondemand_parser.iterate(json_string);
+        element = doc;
+        convert_ondemand_element_to_table(L, element);
+    } catch (simdjson::simdjson_error &error) {
+        // std::string error_message = "JSON error: " << error.what() << " near " << doc.current_location();
+        luaL_error(L, error.what());
     }
-    convert_element_to_table(L, element);
 
     return 1;
 }
 
 static int active_implementation(lua_State *L)
 {
-    std::string name = simdjson::active_implementation->name();
-    std::string description = simdjson::active_implementation->description();
-    std::string implementation_name = name + " (" + description + ")";
+    const auto& implementation = simdjson::get_active_implementation();
+    std::string name = implementation->name();
+    const std::string description = implementation->description();
+    const std::string implementation_name = name + " (" + description + ")";
 
     lua_pushlstring(L, implementation_name.data(), implementation_name.size());
 
     return 1;
 }
 
+
+void recursive_print_json(ondemand::value element) {
+  bool add_comma;
+  switch (element.type()) {
+  case ondemand::json_type::array:
+    std::cout << "[";
+    add_comma = false;
+    for (auto child : element.get_array()) {
+      if (add_comma) {
+        std::cout << ",";
+      }
+      // We need the call to value() to get
+      // an ondemand::value type.
+      recursive_print_json(child.value());
+      add_comma = true;
+    }
+    std::cout << "]";
+    break;
+  case ondemand::json_type::object:
+    std::cout << "{";
+    add_comma = false;
+    for (auto field : element.get_object()) {
+      if (add_comma) {
+        std::cout << ",";
+      }
+      // key() returns the key as it appears in the raw
+      // JSON document, if we want the unescaped key,
+      // we should do field.unescaped_key().
+      // We could also use field.escaped_key() if we want
+      // a std::string_view instance, but we do not need
+      // escaping.
+      std::cout << "\"" << field.key() << "\": ";
+      recursive_print_json(field.value());
+      add_comma = true;
+    }
+    std::cout << "}\n";
+    break;
+  case ondemand::json_type::number:
+    // assume it fits in a double
+    std::cout << element.get_double();
+    break;
+  case ondemand::json_type::string:
+    // get_string() would return escaped string, but
+    // we are happy with unescaped string.
+    std::cout << "\"" << element.get_raw_json_string() << "\"";
+    break;
+  case ondemand::json_type::boolean:
+    std::cout << element.get_bool();
+    break;
+  case ondemand::json_type::null:
+    // We check that the value is indeed null
+    // otherwise: an error is thrown.
+    if (element.is_null()) {
+      std::cout << "null";
+    }
+    break;
+  }
+}
+
+
 // ParsedObject as C++ class
 #define LUA_MYOBJECT "ParsedObject"
 class ParsedObject{
     private:
-        dom::document* doc;
+        simdjson::padded_string json_string;
+        ondemand::document doc;
+        std::unique_ptr<ondemand::parser> parser;
     public:
-        ParsedObject(dom::document* doc) : doc(doc){}
-        ~ParsedObject() { delete doc; }
-        dom::document* get() const{return this->doc;}
+        ParsedObject(const char *json_file): parser(new ondemand::parser{}) {
+            this->json_string = padded_string::load(json_file);
+            // std::unique_ptr<ondemand::parser> parser(new ondemand::parser{});
+            this->doc = this->parser.get()->iterate(json_string);
+            recursive_print_json(this->doc);
+            this->doc.rewind();
+        }
+        // ~ParsedObject() { delete doc; }
+        ondemand::document* get_doc() {return &(this->doc);}
+        // std::shared_ptr<ondemand::parser> get_parser() {return this->parser;}
+        // void iterate(const char *json_file) {
+        //     simdjson::padded_string json_string = padded_string::load(json_file);
+        //     *(this->doc) = this->parser.get()->iterate(json_string);
+        //     ondemand::value val = *(this->doc);
+        //     recursive_print_json(val);
+        // }
 };
 
 static int ParsedObject_delete(lua_State* L){
@@ -155,7 +232,7 @@ static int ParsedObject_open(lua_State *L)
 {
     size_t json_str_len;
     const char *json_str = luaL_checklstring(L, 1, &json_str_len);
-
+/*
     simdjson::error_code error = parser.parse(json_str, json_str_len).error();
 
     if (error) {
@@ -167,65 +244,83 @@ static int ParsedObject_open(lua_State *L)
     *parsedObject = new ParsedObject(new dom::document(std::move(parser.doc)));
     luaL_getmetatable(L, LUA_MYOBJECT);
     lua_setmetatable(L, -2);
-
+*/
     return 1;
 }
+
+
+
 
 static int ParsedObject_open_file(lua_State *L)
 {
     const char *json_file = luaL_checkstring(L, 1);
 
-    simdjson::error_code error = parser.load(json_file).error();
+    simdjson::padded_string json_string;
+    ondemand::document doc;
 
-    if (error) {
-        luaL_error(L, error_message(error));
-        return 1;
-    }
+    try {
+        ParsedObject** parsedObject = (ParsedObject**)(lua_newuserdata(L, sizeof(ParsedObject*)));
+        *parsedObject = new ParsedObject(json_file);
 
-    ParsedObject** parsedObject = (ParsedObject**)(lua_newuserdata(L, sizeof(ParsedObject*)));
-    *parsedObject = new ParsedObject(new dom::document(std::move(parser.doc)));
-    luaL_getmetatable(L, LUA_MYOBJECT);
-    lua_setmetatable(L, -2);
+        // json_string = padded_string::load(json_file);
+        // doc = parser.get_parser()->iterate(json_string);
+        // doc = (*parsedObject)->get_parser()->iterate(json_string);
 
-    return 1;
-}
+        ondemand::document* document = (*parsedObject)->get_doc();
+        recursive_print_json(*document);
+        luaL_getmetatable(L, LUA_MYOBJECT);
+        lua_setmetatable(L, -2);
 
-static int ParsedObject_at(lua_State *L) {
-    dom::document* document = (*reinterpret_cast<ParsedObject**>(luaL_checkudata(L, 1, LUA_MYOBJECT)))->get();
-    const char *pointer = luaL_checkstring(L, 2);    
 
-    dom::element returned_element;
-    simdjson::error_code error;
-
-    dom::element element = document->root();
-
-    element.at(pointer).tie(returned_element, error);
-    if (error) {
-        luaL_error(L, error_message(error));
-        return 1;
-    }
-
-    convert_element_to_table(L, returned_element);
+      } catch (simdjson::simdjson_error &error) {
+          // luaL_error(L, "JSON error: " + error.what() + " near " + doc.current_location());
+        luaL_error(L, error.what());
+      }
 
     return 1;
+
+    /*
+
+        const char *json_file = luaL_checkstring(L, 1);
+
+        simdjson::error_code error = parser.load(json_file).error();
+
+        if (error) {
+            luaL_error(L, error_message(error));
+            return 1;
+        }
+
+        ParsedObject** parsedObject = (ParsedObject**)(lua_newuserdata(L, sizeof(ParsedObject*)));
+        *parsedObject = new ParsedObject(new dom::document(std::move(parser.doc)));
+        luaL_getmetatable(L, LUA_MYOBJECT);
+        lua_setmetatable(L, -2);
+
+        return 1;
+
+    */
+
 }
+
 
 static int ParsedObject_atPointer(lua_State *L) {
-    dom::document* document = (*reinterpret_cast<ParsedObject**>(luaL_checkudata(L, 1, LUA_MYOBJECT)))->get();
-    const char *pointer = luaL_checkstring(L, 2);    
+    ondemand::document* document = (*reinterpret_cast<ParsedObject**>(luaL_checkudata(L, 1, LUA_MYOBJECT)))->get_doc();
+    const char *pointer = luaL_checkstring(L, 2);
 
-    dom::element returned_element;
-    simdjson::error_code error;
+    // std::cout << document;
+    // std::cout << *document;
 
-    dom::element element = document->root();
+  // ondemand::value val = *document;
+    document->rewind();
+  recursive_print_json(*document);
+  std::cout << std::endl;
 
-    element.at_pointer(pointer).tie(returned_element, error);
-    if (error) {
-        luaL_error(L, error_message(error));
-        return 1;
-    }
-
-    convert_element_to_table(L, returned_element);
+    // try {
+    //     ondemand::value returned_element = document->at_pointer(pointer);
+    //     convert_ondemand_element_to_table(L, returned_element);
+    // } catch (simdjson::simdjson_error &error) {
+    //       // luaL_error(L, "JSON error: " + error.what() + " near " + doc.current_location());
+    //     luaL_error(L, error.what());
+    // }
 
     return 1;
 }
@@ -236,7 +331,7 @@ static int ParsedObject_newindex(lua_State *L) {
 }
 
 static const struct luaL_Reg arraylib_m [] = {
-    {"at", ParsedObject_at},
+    {"at", ParsedObject_atPointer},
     {"atPointer", ParsedObject_atPointer},
     {"__newindex", ParsedObject_newindex},
     {"__gc", ParsedObject_delete},
@@ -261,6 +356,6 @@ int luaopen_simdjson (lua_State *L) {
     lua_setfield(L, -2, "_NAME");
     lua_pushliteral(L, LUA_SIMDJSON_VERSION);
     lua_setfield(L, -2, "_VERSION");
-    
+
     return 1;
 }
