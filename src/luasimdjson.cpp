@@ -229,7 +229,7 @@ public:
         parser(new ondemand::parser{}) {
     this->doc = this->parser.get()->iterate(json_string);
   }
-  // ~ParsedObject() { delete doc; }
+  ~ParsedObject() {}
   ondemand::document *get_doc() { return &(this->doc); }
 };
 
