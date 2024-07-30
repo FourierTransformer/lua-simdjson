@@ -60,7 +60,7 @@ print(fileResponse["statuses"][1]["id"])
 ```
 
 ### Open some json
-The `open` methods currently require the use of a JSON pointer, but are very quick.
+The `open` methods currently require the use of a JSON pointer, but are very quick. They are best used when you only need a part of a response. In the example below, it could be useful for just getting the `Thumnail` object with `:atPointer("/Image/Thumbnail")` which will then only create a Lua table with those specific values.
 ```lua
 local simdjson = require("simdjson")
 local response = simdjson.open([[
@@ -86,11 +86,11 @@ local fileResponse = simdjson.openFile("jsonexamples/twitter.json")
 print(fileResponse:atPointer("/statuses/0/id")) --using a JSON pointer
 
 ```
-Starting with version 0.5.0, the the `atPointer` method is JSON pointer compliant. The previous pointer implementation is considered deprecated, but is still available with the `at` method.
+Starting with version 0.5.0, the `atPointer` method is JSON pointer compliant. The previous pointer implementation is considered deprecated, but is still available with the `at` method.
 
 The `open` and `parse` codeblocks should print out the same values. It's worth noting that the JSON pointer indexes from 0.
 
-This lazy style of using the simdjson data structure could also be used with array access in the future, and would result in ultra-fast JSON "parsing".
+This lazy style of using the simdjson data structure could also be used with array access in the future.
 
 ## Error Handling
 lua-simdjson will error out with any errors from simdjson encountered while parsing. They are very good at helping identify what has gone wrong during parsing.

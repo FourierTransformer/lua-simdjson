@@ -1,6 +1,13 @@
 #include <lua.hpp>
 #include <lauxlib.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <sysinfoapi.h>
+#else
+#include <unistd.h>
+#endif
+
 #define NDEBUG
 #define __OPTIMIZE__ 1
 
@@ -32,7 +39,8 @@ static void luaL_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 }
 #endif
 
-static ondemand::parser ondemand_parser;
+ondemand::parser ondemand_parser;
+simdjson::padded_string jsonbuffer;
 
 void convert_ondemand_element_to_table(lua_State *L, ondemand::value element) {
   switch (element.type()) {
@@ -117,6 +125,38 @@ void convert_ondemand_element_to_table(lua_State *L, ondemand::value element) {
   }
 }
 
+// from https://github.com/simdjson/simdjson/blob/master/doc/performance.md#free-padding
+// Returns the default size of the page in bytes on this system.
+long page_size() {
+#ifdef _WIN32
+  SYSTEM_INFO sysInfo;
+  GetSystemInfo(&sysInfo);
+  long pagesize = sysInfo.dwPageSize;
+#else
+  long pagesize = sysconf(_SC_PAGESIZE);
+#endif
+  return pagesize;
+}
+
+// allows us to reuse a json buffer pretty safely
+// Returns true if the buffer + len + simdjson::SIMDJSON_PADDING crosses the
+// page boundary.
+bool need_allocation(const char *buf, size_t len) {
+  return ((reinterpret_cast<uintptr_t>(buf + len - 1) % page_size()) <
+          simdjson::SIMDJSON_PADDING);
+}
+
+simdjson::padded_string_view get_padded_string_view(const char *buf, size_t len,
+                       simdjson::padded_string &jsonbuffer) {
+  if (need_allocation(buf, len)) { // unlikely case
+    jsonbuffer = simdjson::padded_string(buf, len);
+    return jsonbuffer;
+  } else { // no reallcation needed (very likely)
+    return simdjson::padded_string_view(buf, len,
+                                            len + simdjson::SIMDJSON_PADDING);
+  }
+}
+
 static int parse(lua_State *L)
 {
     size_t json_str_len;
@@ -127,7 +167,7 @@ static int parse(lua_State *L)
 
     try {
         // makes a padded_string_view for a bit of quickness!
-        doc = ondemand_parser.iterate(json_str, json_str_len, json_str_len + SIMDJSON_PADDING);
+        doc = ondemand_parser.iterate(get_padded_string_view(json_str, json_str_len, jsonbuffer));
         element = doc;
         convert_ondemand_element_to_table(L, element);
     } catch (simdjson::simdjson_error &error) {
@@ -185,9 +225,9 @@ public:
     this->doc = this->parser.get()->iterate(json_string);
   }
   ParsedObject(const char *json_str, size_t json_str_len)
-      : parser(new ondemand::parser{}) {
-    this->doc = this->parser.get()->iterate(json_str, json_str_len,
-                                            json_str_len + SIMDJSON_PADDING);
+      : json_string(json_str, json_str_len),
+        parser(new ondemand::parser{}) {
+    this->doc = this->parser.get()->iterate(json_string);
   }
   // ~ParsedObject() { delete doc; }
   ondemand::document *get_doc() { return &(this->doc); }
