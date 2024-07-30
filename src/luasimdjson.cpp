@@ -77,19 +77,21 @@ void convert_ondemand_element_to_table(lua_State *L, ondemand::value element) {
           break;
 
           case fallback::number_type::unsigned_integer:
-          // a uint64 can be greater than an int64, so we must check how large and pass as a number
-          // if larger but LUA_MAXINTEGER (which is only defined in 5.3+)
-          #if defined(LUA_MAXINTEGER)
-          uint64_t actual_value = element.get_uint64();
-          if (actual_value > LUA_MAXINTEGER) {
-            lua_pushnumber(L, actual_value);
-          } else {
-            lua_pushinteger(L, actual_value);
+          {
+            // a uint64 can be greater than an int64, so we must check how large and pass as a number
+            // if larger but LUA_MAXINTEGER (which is only defined in 5.3+)
+            #if defined(LUA_MAXINTEGER)
+            uint64_t actual_value = element.get_uint64();
+            if (actual_value > LUA_MAXINTEGER) {
+              lua_pushnumber(L, actual_value);
+            } else {
+              lua_pushinteger(L, actual_value);
+            }
+            #else
+            lua_pushnumber(L, element.get_double());
+            #endif
+            break;
           }
-          #else
-          lua_pushnumber(L, element.get_double());
-          #endif
-          break;
 
           case fallback::number_type::big_integer:
           lua_pushnumber(L, element.get_double());
