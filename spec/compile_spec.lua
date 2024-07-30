@@ -54,7 +54,6 @@ describe("Make sure it parses files correctly", function()
     end
 end)
 
---[[
 describe("Make sure json pointer works with a string", function()
     it("should handle a string", function()
         local fileContents = loadFile("jsonexamples/small/demo.json")
@@ -75,4 +74,3 @@ describe("Make sure json pointer works with openfile", function()
         assert.are.same(943, decodedFile:atPointer("/Image/IDs/1"))
     end)
 end)
-]]

@@ -118,7 +118,6 @@ static int parse_file(lua_State *L)
         element = doc;
         convert_ondemand_element_to_table(L, element);
     } catch (simdjson::simdjson_error &error) {
-        // std::string error_message = "JSON error: " << error.what() << " near " << doc.current_location();
         luaL_error(L, error.what());
     }
 
@@ -138,191 +137,83 @@ static int active_implementation(lua_State *L)
 }
 
 
-void recursive_print_json(ondemand::value element) {
-  bool add_comma;
-  switch (element.type()) {
-  case ondemand::json_type::array:
-    std::cout << "[";
-    add_comma = false;
-    for (auto child : element.get_array()) {
-      if (add_comma) {
-        std::cout << ",";
-      }
-      // We need the call to value() to get
-      // an ondemand::value type.
-      recursive_print_json(child.value());
-      add_comma = true;
-    }
-    std::cout << "]";
-    break;
-  case ondemand::json_type::object:
-    std::cout << "{";
-    add_comma = false;
-    for (auto field : element.get_object()) {
-      if (add_comma) {
-        std::cout << ",";
-      }
-      // key() returns the key as it appears in the raw
-      // JSON document, if we want the unescaped key,
-      // we should do field.unescaped_key().
-      // We could also use field.escaped_key() if we want
-      // a std::string_view instance, but we do not need
-      // escaping.
-      std::cout << "\"" << field.key() << "\": ";
-      recursive_print_json(field.value());
-      add_comma = true;
-    }
-    std::cout << "}\n";
-    break;
-  case ondemand::json_type::number:
-    // assume it fits in a double
-    std::cout << element.get_double();
-    break;
-  case ondemand::json_type::string:
-    // get_string() would return escaped string, but
-    // we are happy with unescaped string.
-    std::cout << "\"" << element.get_raw_json_string() << "\"";
-    break;
-  case ondemand::json_type::boolean:
-    std::cout << element.get_bool();
-    break;
-  case ondemand::json_type::null:
-    // We check that the value is indeed null
-    // otherwise: an error is thrown.
-    if (element.is_null()) {
-      std::cout << "null";
-    }
-    break;
-  }
-}
-
-
 // ParsedObject as C++ class
 #define LUA_MYOBJECT "ParsedObject"
-class ParsedObject{
-    private:
-        simdjson::padded_string json_string;
-        ondemand::document doc;
-        std::unique_ptr<ondemand::parser> parser;
-    public:
-        ParsedObject(const char *json_file): parser(new ondemand::parser{}) {
-            this->json_string = padded_string::load(json_file);
-            // std::unique_ptr<ondemand::parser> parser(new ondemand::parser{});
-            this->doc = this->parser.get()->iterate(json_string);
-            recursive_print_json(this->doc);
-            this->doc.rewind();
-        }
-        // ~ParsedObject() { delete doc; }
-        ondemand::document* get_doc() {return &(this->doc);}
-        // std::shared_ptr<ondemand::parser> get_parser() {return this->parser;}
-        // void iterate(const char *json_file) {
-        //     simdjson::padded_string json_string = padded_string::load(json_file);
-        //     *(this->doc) = this->parser.get()->iterate(json_string);
-        //     ondemand::value val = *(this->doc);
-        //     recursive_print_json(val);
-        // }
+class ParsedObject {
+private:
+  simdjson::padded_string json_string;
+  ondemand::document doc;
+  std::unique_ptr<ondemand::parser> parser;
+
+public:
+  ParsedObject(const char *json_file)
+      : json_string(padded_string::load(json_file)),
+        parser(new ondemand::parser{}) {
+    this->doc = this->parser.get()->iterate(json_string);
+  }
+  ParsedObject(const char *json_str, size_t json_str_len)
+      : parser(new ondemand::parser{}) {
+    this->doc = this->parser.get()->iterate(json_str, json_str_len,
+                                            json_str_len + SIMDJSON_PADDING);
+  }
+  // ~ParsedObject() { delete doc; }
+  ondemand::document *get_doc() { return &(this->doc); }
 };
 
-static int ParsedObject_delete(lua_State* L){
-    delete *reinterpret_cast<ParsedObject**>(lua_touserdata(L, 1));
-    return 0;
+static int ParsedObject_delete(lua_State *L) {
+  delete *reinterpret_cast<ParsedObject **>(lua_touserdata(L, 1));
+  return 0;
 }
 
-static int ParsedObject_open(lua_State *L)
-{
-    size_t json_str_len;
-    const char *json_str = luaL_checklstring(L, 1, &json_str_len);
-/*
-    simdjson::error_code error = parser.parse(json_str, json_str_len).error();
+static int ParsedObject_open(lua_State *L) {
+  size_t json_str_len;
+  const char *json_str = luaL_checklstring(L, 1, &json_str_len);
 
-    if (error) {
-        luaL_error(L, error_message(error));
-        return 1;
-    }
-
-    ParsedObject** parsedObject = (ParsedObject**)(lua_newuserdata(L, sizeof(ParsedObject*)));
-    *parsedObject = new ParsedObject(new dom::document(std::move(parser.doc)));
+  try {
+    ParsedObject **parsedObject =
+        (ParsedObject **)(lua_newuserdata(L, sizeof(ParsedObject *)));
+    *parsedObject = new ParsedObject(json_str, json_str_len);
     luaL_getmetatable(L, LUA_MYOBJECT);
     lua_setmetatable(L, -2);
-*/
-    return 1;
+  } catch (simdjson::simdjson_error &error) {
+    luaL_error(L, error.what());
+  }
+  return 1;
 }
 
+static int ParsedObject_open_file(lua_State *L) {
+  const char *json_file = luaL_checkstring(L, 1);
 
+  simdjson::padded_string json_string;
+  ondemand::document doc;
 
+  try {
+    ParsedObject **parsedObject =
+        (ParsedObject **)(lua_newuserdata(L, sizeof(ParsedObject *)));
+    *parsedObject = new ParsedObject(json_file);
+    luaL_getmetatable(L, LUA_MYOBJECT);
+    lua_setmetatable(L, -2);
+  } catch (simdjson::simdjson_error &error) {
+    luaL_error(L, error.what());
+  }
 
-static int ParsedObject_open_file(lua_State *L)
-{
-    const char *json_file = luaL_checkstring(L, 1);
-
-    simdjson::padded_string json_string;
-    ondemand::document doc;
-
-    try {
-        ParsedObject** parsedObject = (ParsedObject**)(lua_newuserdata(L, sizeof(ParsedObject*)));
-        *parsedObject = new ParsedObject(json_file);
-
-        // json_string = padded_string::load(json_file);
-        // doc = parser.get_parser()->iterate(json_string);
-        // doc = (*parsedObject)->get_parser()->iterate(json_string);
-
-        ondemand::document* document = (*parsedObject)->get_doc();
-        recursive_print_json(*document);
-        luaL_getmetatable(L, LUA_MYOBJECT);
-        lua_setmetatable(L, -2);
-
-
-      } catch (simdjson::simdjson_error &error) {
-          // luaL_error(L, "JSON error: " + error.what() + " near " + doc.current_location());
-        luaL_error(L, error.what());
-      }
-
-    return 1;
-
-    /*
-
-        const char *json_file = luaL_checkstring(L, 1);
-
-        simdjson::error_code error = parser.load(json_file).error();
-
-        if (error) {
-            luaL_error(L, error_message(error));
-            return 1;
-        }
-
-        ParsedObject** parsedObject = (ParsedObject**)(lua_newuserdata(L, sizeof(ParsedObject*)));
-        *parsedObject = new ParsedObject(new dom::document(std::move(parser.doc)));
-        luaL_getmetatable(L, LUA_MYOBJECT);
-        lua_setmetatable(L, -2);
-
-        return 1;
-
-    */
-
+  return 1;
 }
-
 
 static int ParsedObject_atPointer(lua_State *L) {
-    ondemand::document* document = (*reinterpret_cast<ParsedObject**>(luaL_checkudata(L, 1, LUA_MYOBJECT)))->get_doc();
-    const char *pointer = luaL_checkstring(L, 2);
+  ondemand::document *document =
+      (*reinterpret_cast<ParsedObject **>(luaL_checkudata(L, 1, LUA_MYOBJECT)))
+          ->get_doc();
+  const char *pointer = luaL_checkstring(L, 2);
 
-    // std::cout << document;
-    // std::cout << *document;
+  try {
+    ondemand::value returned_element = document->at_pointer(pointer);
+    convert_ondemand_element_to_table(L, returned_element);
+  } catch (simdjson::simdjson_error &error) {
+    luaL_error(L, error.what());
+  }
 
-  // ondemand::value val = *document;
-    document->rewind();
-  recursive_print_json(*document);
-  std::cout << std::endl;
-
-    // try {
-    //     ondemand::value returned_element = document->at_pointer(pointer);
-    //     convert_ondemand_element_to_table(L, returned_element);
-    // } catch (simdjson::simdjson_error &error) {
-    //       // luaL_error(L, "JSON error: " + error.what() + " near " + doc.current_location());
-    //     luaL_error(L, error.what());
-    // }
-
-    return 1;
+  return 1;
 }
 
 static int ParsedObject_newindex(lua_State *L) {
