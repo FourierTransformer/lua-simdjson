@@ -1,7 +1,7 @@
 SRC = src/luasimdjson.cpp src/simdjson.cpp
 INCLUDE = -I$(LUA_INCDIR)
 LIBS = -lpthread
-FLAGS = -std=c++11 -Wall -g $(LIBFLAG) $(CFLAGS)
+FLAGS = -std=c++11 -Wall $(LIBFLAG) $(CFLAGS)
 
 ifdef LUA_LIBDIR
 FLAGS += $(LUA_LIBDIR)/$(LUALIB)
@@ -25,7 +25,7 @@ TARGET = simdjson.$(LIBEXT)
 all: $(TARGET)
 
 $(TARGET):
-	$(CXX) $(SRC) $(FLAGS) $(INCLUDE) $(LIBS_PATH) $(LIBS) -o $@
+	$(CXX) $(SRC) $(FLAGS) $(INCLUDE) $(LIBS) -o $@
 
 clean:
 	rm *.$(LIBEXT)
