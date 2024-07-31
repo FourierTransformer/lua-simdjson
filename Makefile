@@ -25,7 +25,7 @@ TARGET = simdjson.$(LIBEXT)
 all: $(TARGET)
 
 $(TARGET):
-	$(CXX) $(SRC) $(FLAGS) $(INCLUDE) $(LIBS_PATH) $(LIBS) -o $@
+	$(CXX) $(SRC) $(FLAGS) $(INCLUDE) $(LIBS) -o $@
 
 clean:
 	rm *.$(LIBEXT)
