@@ -64,7 +64,7 @@ void convert_ondemand_element_to_table(lua_State *L, ondemand::value element) {
     case ondemand::json_type::object:
       lua_newtable(L);
       for (auto field : element.get_object()) {
-        std::string_view s = field.escaped_key();
+        std::string_view s = field.unescaped_key();
         lua_pushlstring(L, s.data(), s.size());
         convert_ondemand_element_to_table(L, field.value());
         lua_settable(L, -3);
