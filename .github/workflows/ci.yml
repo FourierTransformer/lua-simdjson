@@ -7,13 +7,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [linux, macos]
+        os: [linux, macos, macos-arm64]
         lua: [lua=5.1, lua=5.2, lua=5.3, lua=5.4, luajit=2.0, luajit=2.1]
         include:
         - os: linux
           runner: ubuntu-22.04
         - os: macos
           runner: macos-13
+        - os: macos-arm64
+          runner: macos-14
     name: ${{ matrix.os }} (${{ matrix.lua }})
     runs-on: ${{ matrix.runner }}
     steps:
