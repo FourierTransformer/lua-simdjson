@@ -48,7 +48,7 @@ jobs:
       - name: Install Lua (${{ matrix.lua }})
         run: |
           pip install hererocks
-          hererocks lua_install -r^ --${{ matrix.lua }}
+          hererocks lua_install -r@3a142ce --${{ matrix.lua }}
       - name: Build lua-simdjson
         run: |
           .\lua_install\bin\activate
@@ -56,6 +56,6 @@ jobs:
       - name: Run tests
         run: |
           .\lua_install\bin\activate
-          luarocks install MSVCRT="m" lua-cjson2
-          luarocks install MSVCRT="m" busted
+          luarocks install lua-cjson2
+          luarocks install busted
           busted --verbose
