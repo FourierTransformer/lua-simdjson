@@ -76,15 +76,15 @@ void convert_ondemand_element_to_table(lua_State *L, ondemand::value element) {
         ondemand::number number = element.get_number();
         ondemand::number_type number_type = number.get_number_type();
         switch (number_type) {
-          case fallback::number_type::floating_point_number:
+          case SIMDJSON_BUILTIN_IMPLEMENTATION::number_type::floating_point_number:
           lua_pushnumber(L, element.get_double());
           break;
 
-          case fallback::number_type::signed_integer:
+          case SIMDJSON_BUILTIN_IMPLEMENTATION::number_type::signed_integer:
           lua_pushinteger(L, element.get_int64());
           break;
 
-          case fallback::number_type::unsigned_integer:
+          case SIMDJSON_BUILTIN_IMPLEMENTATION::number_type::unsigned_integer:
           {
             // a uint64 can be greater than an int64, so we must check how large and pass as a number
             // if larger but LUA_MAXINTEGER (which is only defined in 5.3+)
@@ -101,7 +101,7 @@ void convert_ondemand_element_to_table(lua_State *L, ondemand::value element) {
             break;
           }
 
-          case fallback::number_type::big_integer:
+          case SIMDJSON_BUILTIN_IMPLEMENTATION::number_type::big_integer:
           lua_pushnumber(L, element.get_double());
           break;
         }
