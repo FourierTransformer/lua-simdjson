@@ -29,7 +29,7 @@ all: $(TARGET)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 $(TARGET): $(OBJ)
-	$(CC) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
 clean:
 	rm -f *.$(LIBEXT) src/*.o
