@@ -53,11 +53,9 @@ void convert_ondemand_element_to_table(lua_State *L, T element) {
           int count = 1;
           lua_newtable(L);
 
-            for (auto child : element.get_array()) {
+            for (ondemand::value child : element.get_array()) {
               lua_pushinteger(L, count);
-              // We need the call to value() to get
-              // an ondemand::value type.
-              convert_ondemand_element_to_table(L, child.value());
+              convert_ondemand_element_to_table(L, child);
               lua_settable(L, -3);
               count = count + 1;
             }
@@ -66,10 +64,10 @@ void convert_ondemand_element_to_table(lua_State *L, T element) {
 
     case ondemand::json_type::object:
       lua_newtable(L);
-      for (auto field : element.get_object()) {
+      for (ondemand::field field : element.get_object()) {
         std::string_view s = field.unescaped_key();
         lua_pushlstring(L, s.data(), s.size());
-        convert_ondemand_element_to_table(L, field.value().value());
+        convert_ondemand_element_to_table(L, field.value());
         lua_settable(L, -3);
       }
       break;
