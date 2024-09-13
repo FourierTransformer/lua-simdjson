@@ -1,3 +1,4 @@
 test/
 *.so
 *.dll
+*.o

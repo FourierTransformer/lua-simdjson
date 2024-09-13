@@ -1,10 +1,11 @@
-SRC = src/luasimdjson.cpp src/simdjson.cpp
+OBJ = src/luasimdjson.o src/simdjson.o
 INCLUDE = -I$(LUA_INCDIR)
+FLAGS = -std=c++11 -Wall $(CFLAGS)
+LDFLAGS = $(LIBFLAG)
 LIBS = -lpthread
-FLAGS = -std=c++11 -Wall $(LIBFLAG) $(CFLAGS)
 
 ifdef LUA_LIBDIR
-FLAGS += $(LUA_LIBDIR)/$(LUALIB)
+LIBS += $(LUA_LIBDIR)/$(LUALIB)
 endif
 
 ifeq ($(OS),Windows_NT)
@@ -24,11 +25,14 @@ TARGET = simdjson.$(LIBEXT)
 
 all: $(TARGET)
 
-$(TARGET):
-	$(CXX) $(SRC) $(FLAGS) $(INCLUDE) $(LIBS) -o $@
+%.o: %.cpp %.h
+	$(CXX) $(INCLUDE) $(FLAGS) -c $< -o $@
+
+$(TARGET): $(OBJ)
+	$(CC) $(LDFLAGS) $^ -o $@ $(LIBS)
 
 clean:
-	rm *.$(LIBEXT)
+	rm -f *.$(LIBEXT) src/*.o
 
 install: $(TARGET)
 	cp $(TARGET) $(INST_LIBDIR)
