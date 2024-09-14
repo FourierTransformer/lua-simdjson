@@ -28,7 +28,7 @@ all: $(TARGET)
 DEP_FILES = $(OBJ:.o=.d)
 -include $(DEP_FILES)
 
-%.o:
+%.o: %.cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 $(TARGET): $(OBJ)
