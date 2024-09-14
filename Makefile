@@ -25,14 +25,17 @@ TARGET = simdjson.$(LIBEXT)
 
 all: $(TARGET)
 
-%.o: %.cpp %.h
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+DEP_FILES = $(OBJ:.o=.d)
+-include $(DEP_FILES)
+
+%.o:
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 $(TARGET): $(OBJ)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
 clean:
-	rm -f *.$(LIBEXT) src/*.o
+	rm -f *.$(LIBEXT) src/*.{o,d}
 
 install: $(TARGET)
 	cp $(TARGET) $(INST_LIBDIR)
