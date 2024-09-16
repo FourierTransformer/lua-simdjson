@@ -42,7 +42,10 @@ static void luaL_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
 ondemand::parser ondemand_parser;
 simdjson::padded_string jsonbuffer;
 
-void convert_ondemand_element_to_table(lua_State *L, ondemand::value element) {
+template<typename T>
+void convert_ondemand_element_to_table(lua_State *L, T element) {
+  static_assert(std::is_base_of<ondemand::document_reference, T>::value || std::is_base_of<ondemand::value, T>::value, "type parameter must be document_reference or value");
+
   switch (element.type()) {
 
     case ondemand::json_type::array:
@@ -50,11 +53,9 @@ void convert_ondemand_element_to_table(lua_State *L, ondemand::value element) {
           int count = 1;
           lua_newtable(L);
 
-            for (auto child : element.get_array()) {
+            for (ondemand::value child : element.get_array()) {
               lua_pushinteger(L, count);
-              // We need the call to value() to get
-              // an ondemand::value type.
-              convert_ondemand_element_to_table(L, child.value());
+              convert_ondemand_element_to_table(L, child);
               lua_settable(L, -3);
               count = count + 1;
             }
@@ -63,7 +64,7 @@ void convert_ondemand_element_to_table(lua_State *L, ondemand::value element) {
 
     case ondemand::json_type::object:
       lua_newtable(L);
-      for (auto field : element.get_object()) {
+      for (ondemand::field field : element.get_object()) {
         std::string_view s = field.unescaped_key();
         lua_pushlstring(L, s.data(), s.size());
         convert_ondemand_element_to_table(L, field.value());
@@ -163,13 +164,11 @@ static int parse(lua_State *L)
     const char *json_str = luaL_checklstring(L, 1, &json_str_len);
 
     ondemand::document doc;
-    ondemand::value element;
 
     try {
         // makes a padded_string_view for a bit of quickness!
         doc = ondemand_parser.iterate(get_padded_string_view(json_str, json_str_len, jsonbuffer));
-        element = doc;
-        convert_ondemand_element_to_table(L, element);
+        convert_ondemand_element_to_table(L, ondemand::document_reference(doc));
     } catch (simdjson::simdjson_error &error) {
         luaL_error(L, error.what());
     }
@@ -183,13 +182,11 @@ static int parse_file(lua_State *L)
 
     padded_string json_string;
     ondemand::document doc;
-    ondemand::value element;
 
     try {
         json_string = padded_string::load(json_file);
         doc = ondemand_parser.iterate(json_string);
-        element = doc;
-        convert_ondemand_element_to_table(L, element);
+        convert_ondemand_element_to_table(L, ondemand::document_reference(doc));
     } catch (simdjson::simdjson_error &error) {
         luaL_error(L, error.what());
     }
