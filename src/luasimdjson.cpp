@@ -121,7 +121,10 @@ void convert_ondemand_element_to_table(lua_State *L, T& element) {
       break;
 
     case ondemand::json_type::null:
-      lua_pushlightuserdata(L, NULL);
+      // calling is_null().value() will trigger an exception if the value is invalid
+      if (element.is_null().value()) {
+        lua_pushlightuserdata(L, NULL);
+      }
       break;
   }
 }
