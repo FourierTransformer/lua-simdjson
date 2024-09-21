@@ -43,8 +43,8 @@ ondemand::parser ondemand_parser;
 simdjson::padded_string jsonbuffer;
 
 template<typename T>
-void convert_ondemand_element_to_table(lua_State *L, T element) {
-  static_assert(std::is_base_of<ondemand::document_reference, T>::value || std::is_base_of<ondemand::value, T>::value, "type parameter must be document_reference or value");
+void convert_ondemand_element_to_table(lua_State *L, T& element) {
+  static_assert(std::is_base_of<ondemand::document, T>::value || std::is_base_of<ondemand::value, T>::value, "type parameter must be document or value");
 
   switch (element.type()) {
 
@@ -168,7 +168,7 @@ static int parse(lua_State *L)
     try {
         // makes a padded_string_view for a bit of quickness!
         doc = ondemand_parser.iterate(get_padded_string_view(json_str, json_str_len, jsonbuffer));
-        convert_ondemand_element_to_table(L, ondemand::document_reference(doc));
+        convert_ondemand_element_to_table(L, doc);
     } catch (simdjson::simdjson_error &error) {
         luaL_error(L, error.what());
     }
@@ -186,7 +186,7 @@ static int parse_file(lua_State *L)
     try {
         json_string = padded_string::load(json_file);
         doc = ondemand_parser.iterate(json_string);
-        convert_ondemand_element_to_table(L, ondemand::document_reference(doc));
+        convert_ondemand_element_to_table(L, doc);
     } catch (simdjson::simdjson_error &error) {
         luaL_error(L, error.what());
     }
