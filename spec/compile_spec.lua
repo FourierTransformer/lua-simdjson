@@ -108,6 +108,7 @@ end
 
 local invalid_files = {
     "bool_trailing.json",
+    "nully_trailing.json",
     "nil_token.json",
     "nil_token_scalar.json",
     "nully_token.json",
