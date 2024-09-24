@@ -107,7 +107,11 @@ if tonumber(major) >= 5 and tonumber(minor) >= 3 then
 end
 
 local invalid_files = {
-    "bool_trailing.json"
+    "bool_trailing.json",
+    "nil_token.json",
+    -- "nil_token_scalar.json",
+    "nully_token.json",
+    -- "nully_token_scalar.json"
 }
 
 describe("Make sure invalid files are not accepted", function()
