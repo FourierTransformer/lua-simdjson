@@ -105,3 +105,21 @@ if tonumber(major) >= 5 and tonumber(minor) >= 3 then
         end)
     end)
 end
+
+local invalid_files = {
+    "bool_trailing.json"
+}
+
+describe("Make sure invalid files are not accepted", function()
+    for _, file in ipairs(invalid_files) do
+        it("should fail to parse: " .. file, function()
+            local fileContents = loadFile("jsonexamples/invalid/" .. file)
+            local cjsonValue, cjsonError = pcall(function() cjson.decode(fileContents) end)
+            local simdjsonValue, simdjsonError = pcall(function() simdjson.parse(fileContents) end)
+            assert.is.False(cjsonValue)
+            assert.is.False(simdjsonValue)
+            assert(cjsonError)
+            assert(simdjsonError)
+        end)
+    end
+end)
