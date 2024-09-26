@@ -108,10 +108,11 @@ end
 
 local invalid_files = {
     "bool_trailing.json",
+    "nully_trailing.json",
     "nil_token.json",
-    -- "nil_token_scalar.json",
+    "nil_token_scalar.json",
     "nully_token.json",
-    -- "nully_token_scalar.json"
+    "nully_token_scalar.json"
 }
 
 describe("Make sure invalid files are not accepted", function()
