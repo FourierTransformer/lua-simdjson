@@ -15,7 +15,7 @@
 #include "luasimdjson.h"
 
 #define LUA_SIMDJSON_NAME       "simdjson"
-#define LUA_SIMDJSON_VERSION    "0.0.5"
+#define LUA_SIMDJSON_VERSION    "0.0.6"
 
 using namespace simdjson;
 
@@ -124,9 +124,6 @@ void convert_ondemand_element_to_table(lua_State *L, T& element) {
       // calling is_null().value() will trigger an exception if the value is invalid
       if (element.is_null().value()) {
         lua_pushlightuserdata(L, NULL);
-      } else {
-        // workaround for simdjson 3.10.1
-        throw simdjson_error(INCORRECT_TYPE);
       }
       break;
   }
