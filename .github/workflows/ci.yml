@@ -54,7 +54,7 @@ jobs:
       - name: Install Lua (${{ matrix.lua }})
         run: |
           pip install hererocks
-          hererocks lua_install -r@3a142ce --${{ matrix.lua }} --target ${{ matrix.target }}
+          hererocks lua_install -rhttps://github.com/tobil4sk/luarocks@46903c2 --${{ matrix.lua }} --target ${{ matrix.target }}
       - name: Build lua-simdjson
         run: |
           .\lua_install\bin\activate
