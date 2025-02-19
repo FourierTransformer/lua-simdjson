@@ -1,0 +1,27 @@
+OBJ = src/luasimdjson.obj src/simdjson.obj
+CPPFLAGS = -I$(LUA_INCDIR)
+CXXFLAGS = -EHsc -std:c++17 $(CFLAGS)
+LDFLAGS = $(LIBFLAG)
+
+!ifdef LUA_LIBDIR
+LDLIBS = $(LUA_LIBDIR)/$(LUALIB)
+!endif
+
+TARGET = simdjson.dll
+
+all: $(TARGET)
+
+src/luasimdjson.obj: src/luasimdjson.h src/simdjson.h
+src/simdjson.obj: src/simdjson.h
+
+.cpp.obj::
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -Fo:"src\\"
+
+$(TARGET): $(OBJ)
+	$(LD) $(LDFLAGS) $** -out:$@ $(LDLIBS)
+
+clean:
+	del *.dll src\*.obj *.lib *.exp 2>nul
+
+install: $(TARGET)
+	copy $(TARGET) $(INST_LIBDIR)
