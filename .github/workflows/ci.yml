@@ -46,6 +46,7 @@ jobs:
       fail-fast: false
       matrix:
         lua: [lua=5.1, lua=5.2, lua=5.3, lua=5.4, luajit=2.0, luajit=2.1]
+        target: [mingw,vs]
     runs-on: windows-2022
     steps:
       # Checks-out the repository under $GITHUB_WORKSPACE.
@@ -53,7 +54,7 @@ jobs:
       - name: Install Lua (${{ matrix.lua }})
         run: |
           pip install hererocks
-          hererocks lua_install -r@3a142ce --${{ matrix.lua }}
+          hererocks lua_install -r@3a142ce --${{ matrix.lua }} --target ${{ matrix.target }}
       - name: Build lua-simdjson
         run: |
           .\lua_install\bin\activate
