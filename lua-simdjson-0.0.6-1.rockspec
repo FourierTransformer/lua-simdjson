@@ -36,6 +36,7 @@ build = {
          build_variables = {
             LUA_LIBDIR="$(LUA_LIBDIR)",
             LUALIB="$(LUALIB)",
+            LD="$(LD)",
          }
       }
    }

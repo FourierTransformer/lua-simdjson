@@ -3,3 +3,8 @@ test/
 *.dll
 *.o
 *.d
+
+# msvc
+*.obj
+*.lib
+*.exp
