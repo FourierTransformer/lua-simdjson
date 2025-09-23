@@ -15,7 +15,7 @@
 #include "luasimdjson.h"
 
 #define LUA_SIMDJSON_NAME       "simdjson"
-#define LUA_SIMDJSON_VERSION    "0.0.7"
+#define LUA_SIMDJSON_VERSION    "0.0.8"
 
 using namespace simdjson;
 
@@ -125,6 +125,10 @@ void convert_ondemand_element_to_table(lua_State *L, T& element) {
       if (element.is_null().value()) {
         lua_pushlightuserdata(L, NULL);
       }
+      break;
+    
+    case ondemand::json_type::unknown:
+      luaL_error(L, error.what());
       break;
   }
 }
@@ -256,9 +260,6 @@ static int ParsedObject_open(lua_State *L) {
 
 static int ParsedObject_open_file(lua_State *L) {
   const char *json_file = luaL_checkstring(L, 1);
-
-  simdjson::padded_string json_string;
-  ondemand::document doc;
 
   try {
     ParsedObject **parsedObject =
