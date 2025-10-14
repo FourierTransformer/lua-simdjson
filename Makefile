@@ -5,16 +5,16 @@ LDFLAGS = $(LIBFLAG)
 LDLIBS = -lpthread
 
 ifdef LUA_LIBDIR
-LDLIBS += $(LUA_LIBDIR)/$(LUALIB)
+LDFLAGS += -L$(LUA_LIBDIR)
 endif
 
 ifeq ($(OS),Windows_NT)
 	LIBEXT = dll
 else
-	UNAME := $(shell uname -s)
-	ifeq ($(findstring MINGW,$(UNAME)),MINGW)
+	UNAME_S := $(shell uname -s)
+	ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
 		LIBEXT = dll
-	else ifeq ($(findstring CYGWIN,$(UNAME)),CYGWIN)
+	else ifeq ($(findstring CYGWIN,$(UNAME_S)),CYGWIN)
 		LIBEXT = dll
 	else
 		LIBEXT = so
@@ -32,7 +32,11 @@ DEP_FILES = $(OBJ:.o=.d)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 $(TARGET): $(OBJ)
-	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+ifeq ($(UNAME_S),Darwin)
+	$(CXX) -bundle -undefined dynamic_lookup $(LDFLAGS) $^ -o $@ $(LDLIBS)
+else
+	$(CXX) -shared $(LDFLAGS) $^ -o $@ $(LDLIBS)
+endif
 
 clean:
 	rm -f *.$(LIBEXT) src/*.{o,d}

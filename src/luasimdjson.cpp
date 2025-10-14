@@ -126,9 +126,10 @@ void convert_ondemand_element_to_table(lua_State *L, T& element) {
         lua_pushlightuserdata(L, NULL);
       }
       break;
-    
+
     case ondemand::json_type::unknown:
-      luaL_error(L, error.what());
+    default:
+      luaL_error(L, "simdjson::ondemand::json_type::unknown or unsupported type encountered");
       break;
   }
 }
