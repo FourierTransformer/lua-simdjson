@@ -60,8 +60,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install Lua (${{ matrix.lua }})
         run: |
-          pip install hererocks
-          hererocks lua_install -r@28f9d98 --${{ matrix.lua }} --target ${{ matrix.target }}
+          pip install git+https://github.com/luarocks/hererocks
+          hererocks lua_install -r^ --${{ matrix.lua }} --target ${{ matrix.target }}
       - name: Build lua-simdjson
         run: |
           .\lua_install\bin\activate
