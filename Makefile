@@ -5,7 +5,7 @@ LDFLAGS = $(LIBFLAG)
 LDLIBS = -lpthread
 
 ifdef LUA_LIBDIR
-LDLIBS += $(LUA_LIBDIR)
+LDLIBS += $(LUA_LIBDIR)/$(LUALIB)
 endif
 
 ifeq ($(OS),Windows_NT)
