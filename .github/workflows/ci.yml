@@ -11,11 +11,11 @@ jobs:
         lua: [lua=5.1, lua=5.2, lua=5.3, lua=5.4, luajit=2.0, luajit=2.1]
         include:
         - os: linux
-          runner: ubuntu-22.04
+          runner: ubuntu-latest
         - os: macos
-          runner: macos-13
+          runner: macos-15-intel
         - os: macos-arm64
-          runner: macos-14
+          runner: macos-latest
         exclude:
         - os: macos-arm64
           lua: luajit=2.0
@@ -23,10 +23,17 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       # Checks-out the repository under $GITHUB_WORKSPACE.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - name:  Install libreadline on linux
+        run:   |
+               if [ "$RUNNER_OS" == "Linux" ]; then
+                    sudo apt-get install -y libreadline-dev
+               fi
+        shell: bash
+
       - name: Install Lua (${{ matrix.lua }})
         run: |
-          pip install hererocks
+          pip install git+https://github.com/luarocks/hererocks
           hererocks lua_install -r^ --${{ matrix.lua }}
         env:
           MACOSX_DEPLOYMENT_TARGET: 11.0
@@ -50,11 +57,11 @@ jobs:
     runs-on: windows-2022
     steps:
       # Checks-out the repository under $GITHUB_WORKSPACE.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install Lua (${{ matrix.lua }})
         run: |
-          pip install hererocks
-          hererocks lua_install -r@28f9d98 --${{ matrix.lua }} --target ${{ matrix.target }}
+          pip install git+https://github.com/luarocks/hererocks
+          hererocks lua_install -r^ --${{ matrix.lua }} --target ${{ matrix.target }}
       - name: Build lua-simdjson
         run: |
           .\lua_install\bin\activate
