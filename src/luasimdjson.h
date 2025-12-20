@@ -3,7 +3,7 @@
 #ifdef _MSC_VER
 #define LUASIMDJSON_EXPORT __declspec(dllexport)
 #else
-#define LUASIMDJSON_EXPORT extern
+#define LUASIMDJSON_EXPORT __attribute__((visibility("default")))
 #endif
 
 extern "C" {
