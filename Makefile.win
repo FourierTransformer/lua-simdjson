@@ -7,23 +7,19 @@ LDFLAGS = $(LIBFLAG)
 LDLIBS = $(LUA_LIBDIR)/$(LUALIB)
 !endif
 
-# Windows-specific settings
-ifeq ($(OS),Windows_NT)
-    # Detect architecture
-    ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
-        ARCH_FLAG = /D_AMD64_
-    else ifeq ($(PROCESSOR_ARCHITECTURE),x86)
-        ARCH_FLAG = /D_X86_
-    else ifeq ($(PROCESSOR_ARCHITECTURE),ARM64)
-        ARCH_FLAG = /D_ARM64_
-    else
-        # Default to AMD64 if detection fails
-        ARCH_FLAG = /D_AMD64_
-    endif
-    
-    # Update CXXFLAGS to include architecture
-    CXXFLAGS = -I$(LUA_INCDIR) -EHsc -std:c++17 /nologo /MD /O2 $(ARCH_FLAG)
-endif
+# Detect architecture for Windows
+!ifndef ARCH_FLAG
+!if "$(PROCESSOR_ARCHITECTURE)" == "AMD64" || "$(PROCESSOR_ARCHITEW6432)" == "AMD64"
+ARCH_FLAG = /D_AMD64_
+!else if "$(PROCESSOR_ARCHITECTURE)" == "x86"
+ARCH_FLAG = /D_X86_
+!else if "$(PROCESSOR_ARCHITECTURE)" == "ARM64"
+ARCH_FLAG = /D_ARM64_
+!else
+# Default to AMD64 if detection fails
+ARCH_FLAG = /D_AMD64_
+!endif
+!endif
 
 
 TARGET = simdjson.dll
