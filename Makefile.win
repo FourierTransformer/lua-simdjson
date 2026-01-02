@@ -30,7 +30,7 @@ src/luasimdjson.obj: src/luasimdjson.h src/simdjson.h
 src/simdjson.obj: src/simdjson.h
 
 .cpp.obj::
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -Fo:"src\\"
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(ARCH_FLAG) -c $< -Fo:"src\\"
 
 $(TARGET): $(OBJ)
 	$(LD) $(LDFLAGS) $** -out:$@ $(LDLIBS)
