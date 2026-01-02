@@ -1,0 +1,16 @@
+# see https://clang.llvm.org/docs/ClangFormatStyleOptions.html
+---
+Language: Cpp
+Standard: c++11
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Always
+ColumnLimit: 100
+BreakBeforeBraces: Attach
+IndentExternBlock: Indent
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AllowShortFunctionsOnASingleLine: None
+IndentCaseLabels: true
+PointerAlignment: Left

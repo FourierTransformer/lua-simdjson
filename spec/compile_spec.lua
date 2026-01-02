@@ -81,9 +81,8 @@ end)
 
 local major, minor = _VERSION:match('([%d]+)%.(%d+)')
 if tonumber(major) >= 5 and tonumber(minor) >= 3 then
-    describe("Make sure ints and floats parse correctly", function ()
+    describe("Make sure ints and floats parse correctly", function()
         it("should handle decoding numbers appropriately", function()
-
             local numberCheck = simdjson.parse([[
 {
     "float": 1.2,
@@ -101,7 +100,6 @@ if tonumber(major) >= 5 and tonumber(minor) >= 3 then
             assert.are.same("float", math.type(numberCheck["one_above_max_signed_integer"]))
             assert.are.same("integer", math.type(numberCheck["min_unsigned_integer"]))
             assert.are.same("float", math.type(numberCheck["max_unsigned_integer"]))
-
         end)
     end)
 end
@@ -128,4 +126,20 @@ describe("Make sure invalid files are not accepted", function()
             assert(simdjsonError)
         end)
     end
+end)
+
+describe("Active implementation function", function()
+    it("should return a valid implementation name", function()
+        local impl = simdjson.activeImplementation()
+        assert.is_not_nil(impl)
+        assert.is_string(impl)
+        assert.is_truthy(impl:match("%w+")) -- Contains at least one word character
+        assert.is_true(#impl > 0)           -- Non-empty string
+    end)
+
+    it("should contain implementation details", function()
+        local impl = simdjson.activeImplementation()
+        -- Implementation string should have format like "arm64 (ARM NEON)" or "haswell (Intel AVX2)"
+        assert.is_truthy(impl:match("%(.*%)")) -- Contains parentheses with description
+    end)
 end)
