@@ -15,4 +15,5 @@ AlignConsecutiveAssignments: false
 AlignConsecutiveDeclarations: false
 AllowShortFunctionsOnASingleLine: None
 IndentCaseLabels: true
-PointerAlignment: Left
+PointerAlignment: Right
+SpaceBeforeParens: ControlStatements
