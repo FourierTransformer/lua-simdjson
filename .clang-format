@@ -5,10 +5,10 @@ Standard: c++11
 
 SortIncludes: false
 
-IndentWidth: 4
-TabWidth: 4
-UseTab: Always
-ColumnLimit: 100
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+ColumnLimit: 160
 BreakBeforeBraces: Attach
 IndentExternBlock: Indent
 AlignConsecutiveAssignments: false
