@@ -289,9 +289,9 @@ describe("encode() security and edge cases", function()
 
         it("should handle zero-width and special Unicode", function()
             local data = {
-                zero_width = "test\u{200B}here", -- Zero-width space
-                rtl_mark = "test\u{200F}mark",   -- Right-to-left mark
-                combining = "e\u{0301}",         -- e with acute accent (combining)
+                zero_width = "test\226\128\139here", -- Zero-width space (U+200B)
+                rtl_mark = "test\226\128\143mark",   -- Right-to-left mark (U+200F)
+                combining = "e\204\129",             -- e with acute accent combining (U+0301)
             }
             local encoded = simdjson.encode(data)
             local decoded = simdjson.parse(encoded)
