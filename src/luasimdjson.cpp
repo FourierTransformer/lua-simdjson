@@ -1,6 +1,6 @@
 #include <cmath>
-#include <lauxlib.h>
 #include <lua.hpp>
+#include <lauxlib.h>
 
 #ifdef _WIN32
 #include <sysinfoapi.h>
