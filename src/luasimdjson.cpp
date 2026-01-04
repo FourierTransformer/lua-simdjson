@@ -256,43 +256,49 @@ static void parse_encode_options(lua_State *L, int table_index, int &max_depth, 
   lua_pop(L, 1);
 }
 
-// Helper function to get max encode depth from registry
+// Helper function to get max encode depth from registry (with caching)
+static int max_encode_depth_cache = -1; // -1 means not cached
 static int get_max_depth(lua_State *L) {
-  lua_pushstring(L, LUA_SIMDJSON_MAX_ENCODE_DEPTH_KEY);
-  lua_gettable(L, LUA_REGISTRYINDEX);
-
-  int max_depth = DEFAULT_MAX_ENCODE_DEPTH;
-  if (lua_isnumber(L, -1)) {
-    max_depth = lua_tointeger(L, -1);
+  if (max_encode_depth_cache == -1) {
+    lua_pushstring(L, LUA_SIMDJSON_MAX_ENCODE_DEPTH_KEY);
+    lua_gettable(L, LUA_REGISTRYINDEX);
+    if (lua_isnumber(L, -1)) {
+      max_encode_depth_cache = lua_tointeger(L, -1);
+    } else {
+      max_encode_depth_cache = DEFAULT_MAX_ENCODE_DEPTH;
+    }
+    lua_pop(L, 1);
   }
-  lua_pop(L, 1);
-
-  return max_depth;
+  return max_encode_depth_cache;
 }
 
-// Helper function to set max encode depth in registry
+// Helper function to set max encode depth in registry (and update cache)
 static void set_max_depth(lua_State *L, int max_depth) {
+  max_encode_depth_cache = max_depth;
   lua_pushstring(L, LUA_SIMDJSON_MAX_ENCODE_DEPTH_KEY);
   lua_pushinteger(L, max_depth);
   lua_settable(L, LUA_REGISTRYINDEX);
 }
 
-// Helper function to get encode buffer size from registry
+// Helper function to get encode buffer size from registry (with caching)
+static size_t encode_buffer_size_cache = 0; // 0 means not cached
 static size_t get_encode_buffer_size(lua_State *L) {
-  lua_pushstring(L, LUA_SIMDJSON_ENCODE_BUFFER_SIZE_KEY);
-  lua_gettable(L, LUA_REGISTRYINDEX);
-
-  size_t buffer_size = DEFAULT_ENCODE_BUFFER_SIZE;
-  if (lua_isnumber(L, -1)) {
-    buffer_size = lua_tointeger(L, -1);
+  if (encode_buffer_size_cache == 0) {
+    lua_pushstring(L, LUA_SIMDJSON_ENCODE_BUFFER_SIZE_KEY);
+    lua_gettable(L, LUA_REGISTRYINDEX);
+    if (lua_isnumber(L, -1)) {
+      encode_buffer_size_cache = lua_tointeger(L, -1);
+    } else {
+      encode_buffer_size_cache = DEFAULT_ENCODE_BUFFER_SIZE;
+    }
+    lua_pop(L, 1);
   }
-  lua_pop(L, 1);
-
-  return buffer_size;
+  return encode_buffer_size_cache;
 }
 
-// Helper function to set encode buffer size in registry
+// Helper function to set encode buffer size in registry (and update cache)
 static void set_encode_buffer_size(lua_State *L, size_t buffer_size) {
+  encode_buffer_size_cache = buffer_size;
   lua_pushstring(L, LUA_SIMDJSON_ENCODE_BUFFER_SIZE_KEY);
   lua_pushinteger(L, buffer_size);
   lua_settable(L, LUA_REGISTRYINDEX);
