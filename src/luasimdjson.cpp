@@ -221,6 +221,39 @@ static int active_implementation(lua_State *L) {
 // Add forward declaration near the top after includes
 static void serialize_data(lua_State *L, int current_depth, int max_depth, simdjson::builder::string_builder &builder);
 
+// Helper function to parse encode options from Lua table
+static void parse_encode_options(lua_State *L, int table_index, int &max_depth, size_t &desired_buffer_size) {
+  // Check for maxDepth in options table
+  lua_getfield(L, table_index, "maxDepth");
+  if (!lua_isnil(L, -1)) {
+    if (!lua_isnumber(L, -1)) {
+      luaL_error(L, "maxDepth option must be a number");
+    }
+    max_depth = lua_tointeger(L, -1);
+    if (max_depth < 1) {
+      luaL_error(L, "maxDepth must be at least 1");
+    }
+  }
+  lua_pop(L, 1);
+
+  // Check for bufferSize in options table
+  lua_getfield(L, table_index, "bufferSize");
+  if (!lua_isnil(L, -1)) {
+    if (!lua_isnumber(L, -1)) {
+      luaL_error(L, "bufferSize option must be a number");
+    }
+    int buffer_size = lua_tointeger(L, -1);
+    if (buffer_size < 1) {
+      luaL_error(L, "bufferSize must be at least 1");
+    }
+    if ((size_t)buffer_size > DEFAULT_MAX_ENCODE_BUFFER_SIZE) {
+      luaL_error(L, "bufferSize must not exceed %zu", (size_t)DEFAULT_MAX_ENCODE_BUFFER_SIZE);
+    }
+    desired_buffer_size = buffer_size;
+  }
+  lua_pop(L, 1);
+}
+
 // Helper function to get max encode depth from registry
 static int get_max_depth(lua_State *L) {
   lua_pushstring(L, LUA_SIMDJSON_MAX_ENCODE_DEPTH_KEY);
@@ -517,37 +550,7 @@ static int encode(lua_State *L) {
 
   if (num_args == 2) {
     luaL_checktype(L, 2, LUA_TTABLE);
-
-    // Check for maxDepth in options table
-    lua_getfield(L, 2, "maxDepth");
-    if (!lua_isnil(L, -1)) {
-      if (!lua_isnumber(L, -1)) {
-        return luaL_error(L, "maxDepth option must be a number");
-      }
-      max_depth = lua_tointeger(L, -1);
-      if (max_depth < 1) {
-        return luaL_error(L, "maxDepth must be at least 1");
-      }
-    }
-    lua_pop(L, 1);
-
-    // Check for buffer_size in options table
-    lua_getfield(L, 2, "bufferSize");
-    if (!lua_isnil(L, -1)) {
-      if (!lua_isnumber(L, -1)) {
-        return luaL_error(L, "bufferSize option must be a number");
-      }
-      int buffer_size = lua_tointeger(L, -1);
-      if (buffer_size < 1) {
-        return luaL_error(L, "bufferSize must be at least 1");
-      }
-      if ((size_t)buffer_size > DEFAULT_MAX_ENCODE_BUFFER_SIZE) {
-        return luaL_error(L, "bufferSize must not exceed %zu", (size_t)DEFAULT_MAX_ENCODE_BUFFER_SIZE);
-      }
-      desired_buffer_size = buffer_size;
-    }
-    lua_pop(L, 1);
-
+    parse_encode_options(L, 2, max_depth, desired_buffer_size);
     lua_pop(L, 1); // Remove options table, leaving data on top
   }
 
