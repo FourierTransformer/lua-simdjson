@@ -3,8 +3,8 @@
 #include <lauxlib.h>
 
 #ifdef _WIN32
-#include <sysinfoapi.h>
 #include <windows.h>
+#include <sysinfoapi.h>
 #else
 #include <unistd.h>
 #endif
@@ -532,17 +532,17 @@ static int encode(lua_State *L) {
     lua_pop(L, 1);
 
     // Check for buffer_size in options table
-    lua_getfield(L, 2, "buffer_size");
+    lua_getfield(L, 2, "bufferSize");
     if (!lua_isnil(L, -1)) {
       if (!lua_isnumber(L, -1)) {
-        return luaL_error(L, "buffer_size option must be a number");
+        return luaL_error(L, "bufferSize option must be a number");
       }
       int buffer_size = lua_tointeger(L, -1);
       if (buffer_size < 1) {
-        return luaL_error(L, "buffer_size must be at least 1");
+        return luaL_error(L, "bufferSize must be at least 1");
       }
       if ((size_t)buffer_size > DEFAULT_MAX_ENCODE_BUFFER_SIZE) {
-        return luaL_error(L, "buffer_size must not exceed %zu", (size_t)DEFAULT_MAX_ENCODE_BUFFER_SIZE);
+        return luaL_error(L, "bufferSize must not exceed %zu", (size_t)DEFAULT_MAX_ENCODE_BUFFER_SIZE);
       }
       desired_buffer_size = buffer_size;
     }
