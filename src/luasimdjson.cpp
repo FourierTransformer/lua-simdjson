@@ -385,18 +385,10 @@ inline std::pair<const char *, size_t> format_number_as_string(lua_State *L, int
   }
 #endif
 
-  // For floats: Use std::to_string for speed, but ensure JSON-compatible format
+  // For floats: Use snprintf to maintain original formatting (e.g., preserve trailing zeros)
   lua_Number num = lua_tonumber(L, index);
-  std::string str = std::to_string(num);
-  len = str.size();
-  if (len < sizeof(buffer)) {
-    memcpy(buffer, str.c_str(), len + 1);
-    return {buffer, len};
-  } else {
-    // Fallback if too long (rare)
-    len = snprintf(buffer, sizeof(buffer), "%.14g", num);
-    return {buffer, len};
-  }
+  len = snprintf(buffer, sizeof(buffer), "%.14g", num);
+  return {buffer, len};
 }
 
 // Serialize a Lua boolean as a JSON boolean
