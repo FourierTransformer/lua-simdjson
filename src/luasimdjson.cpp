@@ -511,20 +511,47 @@ static int encode(lua_State *L) {
   int num_args = lua_gettop(L);
   luaL_argcheck(L, num_args >= 1 && num_args <= 2, num_args, "expected 1 or 2 arguments");
 
-  // Get max_depth: use second argument if provided, otherwise use global setting
-  int max_depth;
+  // Get max_depth and buffer_size from options table if provided, otherwise use global settings
+  int max_depth = get_max_depth(L);
+  size_t desired_buffer_size = get_encode_buffer_size(L);
+
   if (num_args == 2) {
-    max_depth = luaL_checkinteger(L, 2);
-    if (max_depth < 1) {
-      return luaL_error(L, "maximum depth must be at least 1");
+    luaL_checktype(L, 2, LUA_TTABLE);
+
+    // Check for maxDepth in options table
+    lua_getfield(L, 2, "maxDepth");
+    if (!lua_isnil(L, -1)) {
+      if (!lua_isnumber(L, -1)) {
+        return luaL_error(L, "maxDepth option must be a number");
+      }
+      max_depth = lua_tointeger(L, -1);
+      if (max_depth < 1) {
+        return luaL_error(L, "maxDepth must be at least 1");
+      }
     }
-    lua_pop(L, 1); // Remove max_depth argument, leaving table on top
-  } else {
-    max_depth = get_max_depth(L);
+    lua_pop(L, 1);
+
+    // Check for buffer_size in options table
+    lua_getfield(L, 2, "buffer_size");
+    if (!lua_isnil(L, -1)) {
+      if (!lua_isnumber(L, -1)) {
+        return luaL_error(L, "buffer_size option must be a number");
+      }
+      int buffer_size = lua_tointeger(L, -1);
+      if (buffer_size < 1) {
+        return luaL_error(L, "buffer_size must be at least 1");
+      }
+      if ((size_t)buffer_size > DEFAULT_MAX_ENCODE_BUFFER_SIZE) {
+        return luaL_error(L, "buffer_size must not exceed %zu", (size_t)DEFAULT_MAX_ENCODE_BUFFER_SIZE);
+      }
+      desired_buffer_size = buffer_size;
+    }
+    lua_pop(L, 1);
+
+    lua_pop(L, 1); // Remove options table, leaving data on top
   }
 
   // Get desired buffer size and recreate buffer if size changed
-  size_t desired_buffer_size = get_encode_buffer_size(L);
   if (encode_buffer == nullptr || encode_buffer_size != desired_buffer_size) {
     if (encode_buffer != nullptr) {
       delete encode_buffer;
