@@ -141,9 +141,15 @@ local withNull = {
 }
 local json = simdjson.encode(withNull)  -- {"value":null,"name":"test"}
 
--- Optional: specify maximum nesting depth (default is 1024)
+-- Optional: specify encoding options with a configuration table
 local deepData = { level1 = { level2 = { level3 = "value" } } }
-local json = simdjson.encode(deepData, 10)  -- max depth of 10
+local json = simdjson.encode(deepData, {maxDepth = 10})  -- max depth of 10
+
+-- You can also specify bufferSize per-call (default: 16KB)
+local json = simdjson.encode(data, {bufferSize = 32 * 1024})  -- 32KB buffer
+
+-- Or combine both options
+local json = simdjson.encode(deepData, {maxDepth = 10, bufferSize = 8192})
 ```
 
 You can also configure global encoding settings:
