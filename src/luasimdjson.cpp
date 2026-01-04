@@ -466,14 +466,8 @@ static void serialize_append_object(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATIO
       builder.escape_and_append_with_quotes(std::string_view(key, key_len));
     } else if (key_type == LUA_TNUMBER) {
       auto key_result = format_number_as_string(L, -2);
-      const char *key_str = key_result.first;
-      size_t key_len = key_result.second;
       // Numeric keys are formatted as strings with quotes
-      builder.append('"');
-      for (size_t i = 0; i < key_len; i++) {
-        builder.append(key_str[i]);
-      }
-      builder.append('"');
+      builder.escape_and_append_with_quotes(std::string_view(key_result.first, key_result.second));
     } else {
       const char *type_name = lua_typename(L, key_type);
       luaL_error(L, "unsupported key type in table for serialization: %s", type_name);
