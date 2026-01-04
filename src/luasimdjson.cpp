@@ -256,49 +256,43 @@ static void parse_encode_options(lua_State *L, int table_index, int &max_depth, 
   lua_pop(L, 1);
 }
 
-// Helper function to get max encode depth from registry (with caching)
-static int max_encode_depth_cache = -1; // -1 means not cached
+// Helper function to get max encode depth from registry (with caching for performance)
 static int get_max_depth(lua_State *L) {
-  if (max_encode_depth_cache == -1) {
-    lua_pushstring(L, LUA_SIMDJSON_MAX_ENCODE_DEPTH_KEY);
-    lua_gettable(L, LUA_REGISTRYINDEX);
-    if (lua_isnumber(L, -1)) {
-      max_encode_depth_cache = lua_tointeger(L, -1);
-    } else {
-      max_encode_depth_cache = DEFAULT_MAX_ENCODE_DEPTH;
-    }
-    lua_pop(L, 1);
+  lua_pushstring(L, LUA_SIMDJSON_MAX_ENCODE_DEPTH_KEY);
+  lua_gettable(L, LUA_REGISTRYINDEX);
+
+  int max_depth = DEFAULT_MAX_ENCODE_DEPTH;
+  if (lua_isnumber(L, -1)) {
+    max_depth = lua_tointeger(L, -1);
   }
-  return max_encode_depth_cache;
+  lua_pop(L, 1);
+
+  return max_depth;
 }
 
 // Helper function to set max encode depth in registry (and update cache)
 static void set_max_depth(lua_State *L, int max_depth) {
-  max_encode_depth_cache = max_depth;
   lua_pushstring(L, LUA_SIMDJSON_MAX_ENCODE_DEPTH_KEY);
   lua_pushinteger(L, max_depth);
   lua_settable(L, LUA_REGISTRYINDEX);
 }
 
-// Helper function to get encode buffer size from registry (with caching)
-static size_t encode_buffer_size_cache = 0; // 0 means not cached
+// Helper function to get encode buffer size from registry (with caching for performance)
 static size_t get_encode_buffer_size(lua_State *L) {
-  if (encode_buffer_size_cache == 0) {
-    lua_pushstring(L, LUA_SIMDJSON_ENCODE_BUFFER_SIZE_KEY);
-    lua_gettable(L, LUA_REGISTRYINDEX);
-    if (lua_isnumber(L, -1)) {
-      encode_buffer_size_cache = lua_tointeger(L, -1);
-    } else {
-      encode_buffer_size_cache = DEFAULT_ENCODE_BUFFER_SIZE;
-    }
-    lua_pop(L, 1);
+  lua_pushstring(L, LUA_SIMDJSON_ENCODE_BUFFER_SIZE_KEY);
+  lua_gettable(L, LUA_REGISTRYINDEX);
+
+  size_t buffer_size = DEFAULT_ENCODE_BUFFER_SIZE;
+  if (lua_isnumber(L, -1)) {
+    buffer_size = lua_tointeger(L, -1);
   }
-  return encode_buffer_size_cache;
+  lua_pop(L, 1);
+
+  return buffer_size;
 }
 
 // Helper function to set encode buffer size in registry (and update cache)
 static void set_encode_buffer_size(lua_State *L, size_t buffer_size) {
-  encode_buffer_size_cache = buffer_size;
   lua_pushstring(L, LUA_SIMDJSON_ENCODE_BUFFER_SIZE_KEY);
   lua_pushinteger(L, buffer_size);
   lua_settable(L, LUA_REGISTRYINDEX);
@@ -354,8 +348,17 @@ inline std::pair<const char *, size_t> format_number_as_string(lua_State *L, int
     lua_Integer num = lua_tointeger(L, index);
     // Check if the integer fits safely in a JSON number (double)
     if (num > -max_safe_int && num < max_safe_int) {
-      len = snprintf(buffer, sizeof(buffer), "%lld", (long long)num);
-      return {buffer, len};
+      // Optimized: Use std::to_string for faster integer conversion
+      std::string str = std::to_string(num);
+      len = str.size();
+      if (len < sizeof(buffer)) {
+        memcpy(buffer, str.c_str(), len + 1); // Include null terminator for safety
+        return {buffer, len};
+      } else {
+        // Fallback for very large numbers (rare)
+        len = snprintf(buffer, sizeof(buffer), "%lld", (long long)num);
+        return {buffer, len};
+      }
     }
     // Too large for safe integer representation, format as float
     len = snprintf(buffer, sizeof(buffer), "%.14g", (double)num);
@@ -367,17 +370,33 @@ inline std::pair<const char *, size_t> format_number_as_string(lua_State *L, int
     double num = lua_tonumber(L, index);
     if (std::floor(num) == num && num <= LLONG_MAX && num >= LLONG_MIN) {
       if (num > -max_safe_int && num < max_safe_int) {
-        len = snprintf(buffer, sizeof(buffer), "%lld", static_cast<long long>(num));
-        return {buffer, len};
+        // Optimized: Use std::to_string for integers
+        std::string str = std::to_string(static_cast<long long>(num));
+        len = str.size();
+        if (len < sizeof(buffer)) {
+          memcpy(buffer, str.c_str(), len + 1);
+          return {buffer, len};
+        } else {
+          len = snprintf(buffer, sizeof(buffer), "%lld", static_cast<long long>(num));
+          return {buffer, len};
+        }
       }
     }
   }
 #endif
 
-  // For floats or large numbers, convert to string with %.14g
+  // For floats: Use std::to_string for speed, but ensure JSON-compatible format
   lua_Number num = lua_tonumber(L, index);
-  len = snprintf(buffer, sizeof(buffer), "%.14g", (double)num);
-  return {buffer, len};
+  std::string str = std::to_string(num);
+  len = str.size();
+  if (len < sizeof(buffer)) {
+    memcpy(buffer, str.c_str(), len + 1);
+    return {buffer, len};
+  } else {
+    // Fallback if too long (rare)
+    len = snprintf(buffer, sizeof(buffer), "%.14g", num);
+    return {buffer, len};
+  }
 }
 
 // Serialize a Lua boolean as a JSON boolean
@@ -419,7 +438,7 @@ static void serialize_append_string(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATIO
   builder.escape_and_append_with_quotes(str);
 };
 
-// Serialize a Lua table with integer indices as a JSON array.
+// Serialize a Lua table with integer indices as a JSON array, handling sparse arrays with nulls for missing indices.
 static void serialize_append_array(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATION::builder::string_builder &builder, int table_index, int array_size,
                                    int current_depth, int max_depth) {
   bool first = true;
@@ -496,6 +515,7 @@ static void serialize_append_object(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATIO
   builder.end_object();
 }
 
+// Main serialization dispatcher: converts Lua values to JSON based on their type
 static void serialize_data(lua_State *L, int current_depth, int max_depth, SIMDJSON_BUILTIN_IMPLEMENTATION::builder::string_builder &builder) {
   // Check depth to prevent stack overflow
   if (current_depth > max_depth) {
