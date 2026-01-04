@@ -19,13 +19,15 @@
 #define LUA_SIMDJSON_VERSION "0.0.8"
 
 // keys encode max depth configuration.
-#define LUA_SIMDJSON_MAX_ENCODE_DEPTH_KEY "simdjson.max_encode_depth"
+#define LUA_SIMDJSON_MAX_ENCODE_DEPTH_KEY "simdjson.maxEncodeDepth"
 #define DEFAULT_MAX_ENCODE_DEPTH simdjson::DEFAULT_MAX_DEPTH
 
 // Encode buffer size reservation configuration
-#define LUA_SIMDJSON_ENCODE_BUFFER_SIZE_KEY "simdjson.encode_buffer_size"
+#define LUA_SIMDJSON_ENCODE_BUFFER_SIZE_KEY "simdjson.encodeBufferSize"
 #define DEFAULT_ENCODE_BUFFER_SIZE (16 * 1024) // 16KB
 #define DEFAULT_MAX_ENCODE_BUFFER_SIZE simdjson::SIMDJSON_MAXSIZE_BYTES
+// Max size for number to string conversion buffer
+#define ENCODE_NUMBER_BUFFER_SIZE 32
 
 using namespace simdjson;
 
@@ -301,7 +303,6 @@ static void set_encode_buffer_size(lua_State *L, size_t buffer_size) {
 static int get_table_array_size(lua_State *L) {
   double key_num;
   int max_index = 0;
-  int element_count = 0;
 
   lua_pushnil(L);
   while (lua_next(L, -2) != 0) {
@@ -309,11 +310,10 @@ static int get_table_array_size(lua_State *L) {
     if (lua_type(L, -2) == LUA_TNUMBER) {
       key_num = lua_tonumber(L, -2);
       // Check if it's a positive integer
-      if (floor(key_num) == key_num && key_num >= 1) {
+      if (std::floor(key_num) == key_num && key_num >= 1) {
         if (static_cast<int>(key_num) > max_index) {
           max_index = static_cast<int>(key_num);
         }
-        element_count++;
         lua_pop(L, 1);
         continue;
       }
@@ -324,18 +324,14 @@ static int get_table_array_size(lua_State *L) {
     return -1;
   }
 
-  // Check if array is contiguous (element count should equal max index)
-  if (element_count > 0 && element_count != max_index) {
-    return -1;
-  }
-
+  // Return max_index if we found any valid integer keys (allows sparse arrays)
   return max_index;
 }
 
 // Helper function to format a number as a string
 // Returns pointer to thread-local buffer and length
 inline std::pair<const char *, size_t> format_number_as_string(lua_State *L, int index) {
-  thread_local char buffer[32];
+  thread_local char buffer[ENCODE_NUMBER_BUFFER_SIZE];
   size_t len;
 
   // JSON numbers are represented as doubles, which have limited precision
@@ -378,6 +374,7 @@ inline std::pair<const char *, size_t> format_number_as_string(lua_State *L, int
   return {buffer, len};
 }
 
+// Serialize a Lua boolean as a JSON boolean
 inline void serialize_append_bool(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATION::builder::string_builder &builder, int lindex) {
   // check if it is really a boolean
   if (lua_isboolean(L, lindex)) {
@@ -400,6 +397,7 @@ inline void serialize_append_bool(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATION:
   }
 };
 
+// Serialize a Lua number as a JSON number
 static void serialize_append_number(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATION::builder::string_builder &builder, int lindex) {
   auto num_result = format_number_as_string(L, lindex);
   const char *num_str = num_result.first;
@@ -408,17 +406,19 @@ static void serialize_append_number(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATIO
   builder.append_raw(std::string_view(num_str, len));
 };
 
+// Serialize a Lua string with proper JSON escaping
 static void serialize_append_string(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATION::builder::string_builder &builder, int lindex) {
   size_t len;
   const char *str = lua_tolstring(L, lindex, &len);
   builder.escape_and_append_with_quotes(str);
 };
 
+// Serialize a Lua table with integer indices as a JSON array.
 static void serialize_append_array(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATION::builder::string_builder &builder, int table_index, int array_size,
                                    int current_depth, int max_depth) {
   bool first = true;
-  // Get the actual stack index if using relative indexing
-  if (table_index < 0 && table_index > LUA_REGISTRYINDEX) {
+  // Get the actual stack index if using relative indexing (but not registry)
+  if (table_index < 0 && table_index != LUA_REGISTRYINDEX) {
     table_index = lua_gettop(L) + table_index + 1;
   }
 
@@ -430,11 +430,16 @@ static void serialize_append_array(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATION
     }
     first = false;
 
-    // Push the value at index i onto the stack
+    // Push the value at index i onto the stack (or nil if missing)
     lua_rawgeti(L, table_index, i);
 
-    // Serialize the value
-    serialize_data(L, current_depth, max_depth, builder);
+    // If the value is nil, encode as null; otherwise, serialize normally
+    if (lua_isnil(L, -1)) {
+      builder.append_null();
+    } else {
+      serialize_data(L, current_depth, max_depth, builder);
+    }
+
     // Pop the value from the stack
     lua_pop(L, 1);
   }
@@ -442,6 +447,7 @@ static void serialize_append_array(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATION
   builder.end_array();
 }
 
+// Serialize a Lua table as a JSON object.
 static void serialize_append_object(lua_State *L, SIMDJSON_BUILTIN_IMPLEMENTATION::builder::string_builder &builder, int current_depth, int max_depth) {
   builder.start_object();
   bool first = true;
