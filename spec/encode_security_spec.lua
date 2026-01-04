@@ -189,13 +189,13 @@ describe("encode() security and edge cases", function()
 
             -- Should succeed with high limit
             local success1 = pcall(function()
-                simdjson.encode(deep, 100)
+                simdjson.encode(deep, { maxDepth = 100 })
             end)
             assert.is_true(success1)
 
             -- Should fail with low limit
             local success2 = pcall(function()
-                simdjson.encode(deep, 10)
+                simdjson.encode(deep, { maxDepth = 10 })
             end)
             assert.is_false(success2)
         end)
