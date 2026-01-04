@@ -7,21 +7,6 @@ LDFLAGS = $(LIBFLAG)
 LDLIBS = $(LUA_LIBDIR)/$(LUALIB)
 !endif
 
-# Detect architecture for Windows
-!ifndef ARCH_FLAG
-!if "$(PROCESSOR_ARCHITECTURE)" == "AMD64" || "$(PROCESSOR_ARCHITEW6432)" == "AMD64"
-ARCH_FLAG = /D_AMD64_
-!else if "$(PROCESSOR_ARCHITECTURE)" == "x86"
-ARCH_FLAG = /D_X86_
-!else if "$(PROCESSOR_ARCHITECTURE)" == "ARM64"
-ARCH_FLAG = /D_ARM64_
-!else
-# Default to AMD64 if detection fails
-ARCH_FLAG = /D_AMD64_
-!endif
-!endif
-
-
 TARGET = simdjson.dll
 
 all: $(TARGET)
@@ -30,7 +15,7 @@ src/luasimdjson.obj: src/luasimdjson.h src/simdjson.h
 src/simdjson.obj: src/simdjson.h
 
 .cpp.obj::
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(ARCH_FLAG) -c $< -Fo:"src\\"
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -Fo:"src\\"
 
 $(TARGET): $(OBJ)
 	$(LD) $(LDFLAGS) $** -out:$@ $(LDLIBS)
