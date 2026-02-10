@@ -1,9 +1,9 @@
 # lua-simdjson
 [![Build Status](https://github.com/FourierTransformer/lua-simdjson/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/FourierTransformer/lua-simdjson/actions?query=branch%3Amaster)
 
-A basic Lua binding to [simdjson](https://simdjson.org). The simdjson library is an incredibly fast JSON parser that uses SIMD instructions and fancy algorithms to parse JSON very quickly. It's been tested with LuaJIT 2.0/2.1 and Lua 5.1, 5.2, 5.3, and 5.4 on linux/osx/windows. It has a general parsing mode and a lazy mode that uses a JSON pointer.
+A basic Lua binding to [simdjson](https://simdjson.org). The simdjson library is an incredibly fast JSON parser that uses SIMD instructions and fancy algorithms to parse JSON very quickly. It's been tested with LuaJIT 2.0/2.1 and Lua 5.1 to 5.5 on linux/osx/windows. It has a general parsing mode and a lazy mode that uses a JSON pointer.
 
-Current simdjson version: 4.2.3
+Current simdjson version: 4.2.4
 
 ## Installation
 If all the requirements are met, lua-simdjson can be install via luarocks with:
