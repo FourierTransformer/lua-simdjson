@@ -171,12 +171,47 @@ static void write_encode_buffer_size(lua_State *L, size_t buffer_size)
 }
 
 // Return the array length for a dense 1..n table, or -1 for an object.
+// The raw sequence length lets non-array tables with no sequence part be
+// rejected after inspecting only their first entry. Tables that may be arrays
+// are traversed once to verify that they contain exactly the keys 1..n.
 static int get_table_array_size(lua_State *L, int table_index)
 {
   table_index = absolute_index(L, table_index);
-  int entry_count = 0;
-  int max_index = 0;
 
+  size_t raw_length;
+#if LUA_VERSION_NUM >= 502
+  raw_length = lua_rawlen(L, table_index);
+#else
+  raw_length = lua_objlen(L, table_index);
+#endif
+
+  // The function and encoder array indexes use int, so larger tables retain
+  // the existing object encoding behavior rather than narrowing the length.
+  if (raw_length > static_cast<size_t>(INT_MAX))
+  {
+    return -1;
+  }
+  int hint = static_cast<int>(raw_length);
+
+  if (hint == 0)
+  {
+    // A zero raw length means the table is empty or cannot be a dense array.
+    // Inspecting the first entry distinguishes those cases without traversing
+    // the entire object.
+    lua_pushnil(L);
+    if (lua_next(L, table_index) == 0)
+    {
+      // Empty tables are encoded as objects by serialize_table().
+      return 0;
+    }
+    lua_pop(L, 2);
+    // Non-empty with no sequence keys — it's an object.
+    return -1;
+  }
+
+  // Verify that the table contains exactly hint numeric keys in the range
+  // 1..hint, with no object keys or holes.
+  int entry_count = 0;
   lua_pushnil(L);
   while (lua_next(L, table_index) != 0)
   {
@@ -188,21 +223,19 @@ static int get_table_array_size(lua_State *L, int table_index)
 
     lua_Number key = lua_tonumber(L, -2);
     if (!std::isfinite(key) || std::floor(key) != key || key < 1 ||
-        key > INT_MAX)
+        key > static_cast<lua_Number>(hint))
     {
+      // Key is out of the expected 1..hint range — not a pure sequence.
       lua_pop(L, 2);
       return -1;
     }
 
     entry_count++;
-    if (static_cast<int>(key) > max_index)
-    {
-      max_index = static_cast<int>(key);
-    }
     lua_pop(L, 1);
   }
 
-  return max_index == entry_count ? max_index : -1;
+  // If entry_count == hint, every slot 1..hint is filled with no extras.
+  return entry_count == hint ? hint : -1;
 }
 
 static void serialize_data(lua_State *L, int value_index,

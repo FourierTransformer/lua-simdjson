@@ -115,7 +115,7 @@ local limited = simdjson.encode(data, {
 The default maximum depth and initial buffer size can also be configured globally:
 
 ```lua
-simdjson.setMaxEncodeDepth(512)
+simdjson.setMaxEncodeDepth(64)
 simdjson.setEncodeBufferSize(32 * 1024)
 
 local maxDepth = simdjson.getMaxEncodeDepth()
