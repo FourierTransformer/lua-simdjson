@@ -70,3 +70,29 @@ jobs:
           luarocks install lua-cjson2
           luarocks install busted
           busted --verbose
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libreadline-dev
+          pip install git+https://github.com/luarocks/hererocks
+          hererocks lua_install -r^ --lua=5.4
+      - name: Build with AddressSanitizer and UndefinedBehaviorSanitizer
+        run: |
+          source lua_install/bin/activate
+          luarocks config variables.LIBFLAG -- "-shared -fsanitize=address,undefined"
+          CFLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+          luarocks make
+      - name: Run tests with sanitizers
+        run: |
+          source lua_install/bin/activate
+          luarocks install lua-cjson2
+          luarocks install busted
+          export LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(g++ -print-file-name=libstdc++.so):$(gcc -print-file-name=libubsan.so)"
+          export ASAN_OPTIONS="detect_leaks=1:halt_on_error=1"
+          export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
+          busted --verbose

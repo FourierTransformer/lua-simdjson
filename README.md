@@ -3,7 +3,7 @@
 
 A basic Lua binding to [simdjson](https://simdjson.org). The simdjson library is an incredibly fast JSON parser that uses SIMD instructions and fancy algorithms to parse JSON very quickly. It's been tested with LuaJIT 2.0/2.1 and Lua 5.1 to 5.5 on linux/osx/windows. It has a general parsing mode and a lazy mode that uses a JSON pointer.
 
-Current simdjson version: 4.2.4
+Current simdjson version: 4.6.4
 
 ## Installation
 If all the requirements are met, lua-simdjson can be install via luarocks with:
@@ -15,7 +15,7 @@ Otherwise it can be installed manually by pulling the repo and running luarocks 
 
 ## Requirements
  * lua-simdjson only works on 64bit systems.
- * a Lua build environment with support for C++11
+ * a Lua build environment with support for C++17
    * g++ version 7+ and clang++ version 6+ or newer should work!
 
 ## Parsing
@@ -93,6 +93,37 @@ The `open` and `parse` codeblocks should print out the same values. It's worth n
 
 This lazy style of using the simdjson data structure could also be used with array access in the future.
 
+## Encoding
+The `encode` method converts Lua values and tables into JSON strings. Its optional second argument is a table so that encoding options can be extended without changing the function signature.
+
+```lua
+local simdjson = require("simdjson")
+
+local data = {
+    name = "Alice",
+    active = true,
+    scores = {95, 87.5, 92}
+}
+
+local json = simdjson.encode(data)
+local limited = simdjson.encode(data, {
+    maxDepth = 10,
+    bufferSize = 8192
+})
+```
+
+The default maximum depth and initial buffer size can also be configured globally:
+
+```lua
+simdjson.setMaxEncodeDepth(512)
+simdjson.setEncodeBufferSize(32 * 1024)
+
+local maxDepth = simdjson.getMaxEncodeDepth()
+local bufferSize = simdjson.getEncodeBufferSize()
+```
+
+Tables containing consecutive positive integer keys from 1 through n are encoded as arrays. Sparse and mixed-key tables are encoded as objects, which prevents small tables with very large indices from expanding into enormous arrays. `simdjson.null` represents JSON `null`. Numbers and booleans are formatted by simdjson's string builder, encoded strings are validated as UTF-8, non-finite numbers are rejected, and cyclic tables produce an error. `maxDepth` is limited to 128 to protect the native stack, and the initial `bufferSize` is capped at 64 MiB.
+
 ## Error Handling
 lua-simdjson will error out with any errors from simdjson encountered while parsing. They are very good at helping identify what has gone wrong during parsing.
 
@@ -110,13 +141,12 @@ All tested files are in the [jsonexamples folder](jsonexamples/).
 lua-simdjson, like the simdjson library performs better on more modern hardware. These benchmarks were run on a ninth-gen i7 processor. On an older processor, rapidjson may perform better.
 
 ## Caveats & Alternatives
- * there is no encoding/dumping a Lua table to JSON (yet! Most other lua JSON libraries can handle this)
  * it only works on 64 bit systems
  * it builds a large binary. On a modern linux system, it ended up being \~200k (lua-cjson comes in at 42k)
  * since it's an external module, it's not quite as easy to just grab the file and go (dkjson has you covered here!)
 
 ## Philosophy
-I plan to keep it fairly inline with what the original simdjson library is capable of doing, which really means not adding too many additional options. The big _thing_ that's missing so far is encoding a lua table to JSON. I may add in an encoder at some point.
+I plan to keep it fairly inline with what the original simdjson library is capable of doing, which really means not adding too many additional options.
 
 ## Licenses
  * The jsonexamples, src/simdjson.cpp, src/simdjson.h are unmodified from the released version simdjson under the Apache License 2.0.
