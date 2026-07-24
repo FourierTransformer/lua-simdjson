@@ -1,6 +1,6 @@
-OBJ = src/luasimdjson.o src/simdjson.o
+OBJ = src/luasimdjson.o src/lua_encoder.o src/simdjson.o
 CPPFLAGS = -I$(LUA_INCDIR)
-CXXFLAGS = -std=c++11 -Wall -fvisibility=hidden $(CFLAGS)
+CXXFLAGS = -std=c++17 -Wall -fvisibility=hidden $(CFLAGS)
 LDFLAGS = $(LIBFLAG)
 LDLIBS = -lpthread
 
@@ -35,7 +35,7 @@ $(TARGET): $(OBJ)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
 clean:
-	rm -f *.$(LIBEXT) src/*.{o,d}
+	rm -f *.$(LIBEXT) src/*.o src/*.d
 
 install: $(TARGET)
 	cp $(TARGET) $(INST_LIBDIR)

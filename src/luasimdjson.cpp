@@ -1,12 +1,9 @@
+#include <cstring>
 #include <lua.hpp>
 #include <lauxlib.h>
-
-#ifdef _WIN32
-#include <windows.h>
-#include <sysinfoapi.h>
-#else
-#include <unistd.h>
-#endif
+#include <limits>
+#include <memory>
+#include <new>
 
 #define NDEBUG
 #define __OPTIMIZE__ 1
@@ -41,8 +38,37 @@ static void luaL_setfuncs(lua_State *L, const luaL_Reg *l, int nup)
 }
 #endif
 
-ondemand::parser ondemand_parser;
-simdjson::padded_string jsonbuffer;
+thread_local ondemand::parser ondemand_parser;
+thread_local std::unique_ptr<char[]> parse_buffer;
+thread_local size_t parse_buffer_capacity = 0;
+
+static simdjson::padded_string_view copy_to_padded_buffer(lua_State *L,
+                                                          const char *data,
+                                                          size_t length)
+{
+  if (length > std::numeric_limits<size_t>::max() - SIMDJSON_PADDING)
+  {
+    luaL_error(L, "JSON input is too large");
+    return simdjson::padded_string_view();
+  }
+
+  size_t required_capacity = length + SIMDJSON_PADDING;
+  if (parse_buffer_capacity < required_capacity)
+  {
+    char *replacement = new (std::nothrow) char[required_capacity];
+    if (replacement == nullptr)
+    {
+      luaL_error(L, "failed to allocate JSON parse buffer");
+      return simdjson::padded_string_view();
+    }
+    parse_buffer.reset(replacement);
+    parse_buffer_capacity = required_capacity;
+  }
+
+  std::memcpy(parse_buffer.get(), data, length);
+  return simdjson::padded_string_view(parse_buffer.get(), length,
+                                      parse_buffer_capacity);
+}
 
 template <typename T>
 void convert_ondemand_element_to_table(lua_State *L, T &element)
@@ -145,44 +171,6 @@ void convert_ondemand_element_to_table(lua_State *L, T &element)
   }
 }
 
-// from https://github.com/simdjson/simdjson/blob/master/doc/performance.md#free-padding
-// Returns the default size of the page in bytes on this system.
-long page_size()
-{
-#ifdef _WIN32
-  SYSTEM_INFO sysInfo;
-  GetSystemInfo(&sysInfo);
-  long pagesize = sysInfo.dwPageSize;
-#else
-  long pagesize = sysconf(_SC_PAGESIZE);
-#endif
-  return pagesize;
-}
-
-// allows us to reuse a json buffer pretty safely
-// Returns true if the buffer + len + simdjson::SIMDJSON_PADDING crosses the
-// page boundary.
-bool need_allocation(const char *buf, size_t len)
-{
-  return ((reinterpret_cast<uintptr_t>(buf + len - 1) % page_size()) <
-          simdjson::SIMDJSON_PADDING);
-}
-
-simdjson::padded_string_view get_padded_string_view(const char *buf, size_t len,
-                                                    simdjson::padded_string &jsonbuffer)
-{
-  if (need_allocation(buf, len))
-  { // unlikely case
-    jsonbuffer = simdjson::padded_string(buf, len);
-    return jsonbuffer;
-  }
-  else
-  { // no reallcation needed (very likely)
-    return simdjson::padded_string_view(buf, len,
-                                        len + simdjson::SIMDJSON_PADDING);
-  }
-}
-
 static int parse(lua_State *L)
 {
   size_t json_str_len;
@@ -192,8 +180,10 @@ static int parse(lua_State *L)
 
   try
   {
-    // makes a padded_string_view for a bit of quickness!
-    doc = ondemand_parser.iterate(get_padded_string_view(json_str, json_str_len, jsonbuffer));
+    // Lua owns json_str and does not guarantee simdjson's required trailing
+    // padding. Copy it into reusable padded storage before parsing.
+    doc = ondemand_parser.iterate(
+        copy_to_padded_buffer(L, json_str, json_str_len));
     convert_ondemand_element_to_table(L, doc);
   }
   catch (simdjson::simdjson_error &error)
