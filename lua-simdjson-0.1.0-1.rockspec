@@ -1,13 +1,13 @@
 package="lua-simdjson"
-version="0.0.9-1"
+version="0.1.0-1"
 source = {
    url = "git://github.com/FourierTransformer/lua-simdjson",
-   tag = "0.0.9"
+   tag = "0.1.0"
 }
 description = {
    summary = "This is a simple Lua binding for simdjson",
    detailed = [[
-      This is a c++ binding to simdjson for parsing JSON very quickly.
+      This is a c++ binding to simdjson for parsing and encoding JSON very quickly.
    ]],
    homepage = "https://github.com/FourierTransformer/lua-simdjson",
    license = "Apache-2.0"

@@ -6,7 +6,7 @@ source = {
 description = {
    summary = "This is a simple Lua binding for simdjson",
    detailed = [[
-      This is a c++ binding to simdjson for parsing JSON very quickly.
+      This is a c++ binding to simdjson for parsing and encoding JSON very quickly.
    ]],
    homepage = "https://github.com/FourierTransformer/lua-simdjson",
    license = "Apache-2.0"
