@@ -1,8 +1,8 @@
 package="lua-simdjson"
-version="0.1.0-1"
+version="0.1.1-1"
 source = {
    url = "git://github.com/FourierTransformer/lua-simdjson",
-   tag = "0.1.0"
+   tag = "0.1.1"
 }
 description = {
    summary = "This is a simple Lua binding for simdjson",
