@@ -1,16 +1,15 @@
-#include <lauxlib.h>
-
 #include <cstring>
 #include <limits>
 #include <lua.hpp>
+#include <lauxlib.h>
 #include <memory>
 #include <new>
 
 #define NDEBUG
 #define __OPTIMIZE__ 1
 
-#include "luasimdjson.h"
 #include "simdjson.h"
+#include "luasimdjson.h"
 
 #define LUA_SIMDJSON_NAME "simdjson"
 #define LUA_SIMDJSON_VERSION "0.1.1"
