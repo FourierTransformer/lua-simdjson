@@ -87,7 +87,7 @@ local fileResponse = simdjson.openFile("jsonexamples/twitter.json")
 print(fileResponse:atPointer("/statuses/0/id")) --using a JSON pointer
 
 ```
-Starting with version 0.2.0, the `atPointer` method is JSON pointer compliant. The previous pointer implementation is considered deprecated, but is still available with the `at` method.
+Starting with version 0.2.0, the `atPointer` method is JSON pointer compliant.
 
 The `open` and `parse` codeblocks should print out the same values. It's worth noting that the JSON pointer indexes from 0.
 
