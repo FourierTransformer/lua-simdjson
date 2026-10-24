@@ -1,7 +1,7 @@
 #include <cstring>
+#include <limits>
 #include <lua.hpp>
 #include <lauxlib.h>
-#include <limits>
 #include <memory>
 #include <new>
 
@@ -12,21 +12,20 @@
 #include "luasimdjson.h"
 
 #define LUA_SIMDJSON_NAME "simdjson"
-#define LUA_SIMDJSON_VERSION "0.0.9"
+#define LUA_SIMDJSON_VERSION "0.1.1"
 
 using namespace simdjson;
 
-#if !defined(luaL_newlibtable) && (!defined LUA_VERSION_NUM || LUA_VERSION_NUM <= 501)
+#if !defined(luaL_newlibtable) && \
+    (!defined LUA_VERSION_NUM || LUA_VERSION_NUM <= 501)
 /*
 ** set_funcs compat for 5.1
 ** Stolen from: http://lua-users.org/wiki/CompatibilityWithLuaFive
 ** Adapted from Lua 5.2.0
 */
-static void luaL_setfuncs(lua_State *L, const luaL_Reg *l, int nup)
-{
+static void luaL_setfuncs(lua_State* L, const luaL_Reg* l, int nup) {
   luaL_checkstack(L, nup + 1, "too many upvalues");
-  for (; l->name != NULL; l++)
-  { /* fill the table with given functions */
+  for (; l->name != NULL; l++) { /* fill the table with given functions */
     int i;
     lua_pushstring(L, l->name);
     for (i = 0; i < nup; i++) /* copy upvalues to the top */
@@ -42,22 +41,18 @@ thread_local ondemand::parser ondemand_parser;
 thread_local std::unique_ptr<char[]> parse_buffer;
 thread_local size_t parse_buffer_capacity = 0;
 
-static simdjson::padded_string_view copy_to_padded_buffer(lua_State *L,
-                                                          const char *data,
-                                                          size_t length)
-{
-  if (length > std::numeric_limits<size_t>::max() - SIMDJSON_PADDING)
-  {
+static simdjson::padded_string_view copy_to_padded_buffer(lua_State* L,
+                                                          const char* data,
+                                                          size_t length) {
+  if (length > std::numeric_limits<size_t>::max() - SIMDJSON_PADDING) {
     luaL_error(L, "JSON input is too large");
     return simdjson::padded_string_view();
   }
 
   size_t required_capacity = length + SIMDJSON_PADDING;
-  if (parse_buffer_capacity < required_capacity)
-  {
-    char *replacement = new (std::nothrow) char[required_capacity];
-    if (replacement == nullptr)
-    {
+  if (parse_buffer_capacity < required_capacity) {
+    char* replacement = new (std::nothrow) char[required_capacity];
+    if (replacement == nullptr) {
       luaL_error(L, "failed to allocate JSON parse buffer");
       return simdjson::padded_string_view();
     }
@@ -71,153 +66,136 @@ static simdjson::padded_string_view copy_to_padded_buffer(lua_State *L,
 }
 
 template <typename T>
-void convert_ondemand_element_to_table(lua_State *L, T &element)
-{
-  static_assert(std::is_base_of<ondemand::document, T>::value || std::is_base_of<ondemand::value, T>::value, "type parameter must be document or value");
+void convert_ondemand_element_to_table(lua_State* L, T& element) {
+  static_assert(std::is_base_of<ondemand::document, T>::value ||
+                    std::is_base_of<ondemand::value, T>::value,
+                "type parameter must be document or value");
 
-  switch (element.type())
-  {
+  switch (element.type()) {
+    case ondemand::json_type::array: {
+      int count = 1;
+      lua_newtable(L);
 
-  case ondemand::json_type::array:
-  {
-    int count = 1;
-    lua_newtable(L);
-
-    for (ondemand::value child : element.get_array())
-    {
-      lua_pushinteger(L, count);
-      convert_ondemand_element_to_table(L, child);
-      lua_settable(L, -3);
-      count = count + 1;
+      for (ondemand::value child : element.get_array()) {
+        lua_pushinteger(L, count);
+        convert_ondemand_element_to_table(L, child);
+        lua_settable(L, -3);
+        count = count + 1;
+      }
+      break;
     }
-    break;
-  }
 
-  case ondemand::json_type::object:
-    lua_newtable(L);
-    for (ondemand::field field : element.get_object())
-    {
-      std::string_view s = field.unescaped_key();
-      lua_pushlstring(L, s.data(), s.size());
-      convert_ondemand_element_to_table(L, field.value());
-      lua_settable(L, -3);
-    }
-    break;
-
-  case ondemand::json_type::number:
-  {
-    ondemand::number number = element.get_number();
-    ondemand::number_type number_type = number.get_number_type();
-    switch (number_type)
-    {
-    case SIMDJSON_BUILTIN_IMPLEMENTATION::number_type::floating_point_number:
-      lua_pushnumber(L, element.get_double());
+    case ondemand::json_type::object:
+      lua_newtable(L);
+      for (ondemand::field field : element.get_object()) {
+        std::string_view s = field.unescaped_key();
+        lua_pushlstring(L, s.data(), s.size());
+        convert_ondemand_element_to_table(L, field.value());
+        lua_settable(L, -3);
+      }
       break;
 
-    case SIMDJSON_BUILTIN_IMPLEMENTATION::number_type::signed_integer:
-      lua_pushinteger(L, element.get_int64());
-      break;
+    case ondemand::json_type::number: {
+      ondemand::number number = element.get_number();
+      ondemand::number_type number_type = number.get_number_type();
+      switch (number_type) {
+        case SIMDJSON_BUILTIN_IMPLEMENTATION::number_type::
+            floating_point_number:
+          lua_pushnumber(L, element.get_double());
+          break;
 
-    case SIMDJSON_BUILTIN_IMPLEMENTATION::number_type::unsigned_integer:
-    {
-// a uint64 can be greater than an int64, so we must check how large and pass as a number
-// if larger but LUA_MAXINTEGER (which is only defined in 5.3+)
+        case SIMDJSON_BUILTIN_IMPLEMENTATION::number_type::signed_integer:
+          lua_pushinteger(L, element.get_int64());
+          break;
+
+        case SIMDJSON_BUILTIN_IMPLEMENTATION::number_type::unsigned_integer: {
+// a uint64 can be greater than an int64, so we must check how large and pass as
+// a number if larger but LUA_MAXINTEGER (which is only defined in 5.3+)
 #if defined(LUA_MAXINTEGER)
-      uint64_t actual_value = element.get_uint64();
-      if (actual_value > LUA_MAXINTEGER)
-      {
-        lua_pushnumber(L, actual_value);
-      }
-      else
-      {
-        lua_pushinteger(L, actual_value);
-      }
+          uint64_t actual_value = element.get_uint64();
+          if (actual_value > LUA_MAXINTEGER) {
+            lua_pushnumber(L, actual_value);
+          } else {
+            lua_pushinteger(L, actual_value);
+          }
 #else
-      lua_pushnumber(L, element.get_double());
+          lua_pushnumber(L, element.get_double());
 #endif
+          break;
+        }
+
+        case SIMDJSON_BUILTIN_IMPLEMENTATION::number_type::big_integer:
+          lua_pushnumber(L, element.get_double());
+          break;
+      }
       break;
     }
 
-    case SIMDJSON_BUILTIN_IMPLEMENTATION::number_type::big_integer:
-      lua_pushnumber(L, element.get_double());
+    case ondemand::json_type::string: {
+      std::string_view s = element.get_string();
+      lua_pushlstring(L, s.data(), s.size());
       break;
     }
-    break;
-  }
 
-  case ondemand::json_type::string:
-  {
-    std::string_view s = element.get_string();
-    lua_pushlstring(L, s.data(), s.size());
-    break;
-  }
+    case ondemand::json_type::boolean:
+      lua_pushboolean(L, element.get_bool());
+      break;
 
-  case ondemand::json_type::boolean:
-    lua_pushboolean(L, element.get_bool());
-    break;
+    case ondemand::json_type::null:
+      // calling is_null().value() will trigger an exception if the value is
+      // invalid
+      if (element.is_null().value()) {
+        lua_pushlightuserdata(L, NULL);
+      }
+      break;
 
-  case ondemand::json_type::null:
-    // calling is_null().value() will trigger an exception if the value is invalid
-    if (element.is_null().value())
-    {
-      lua_pushlightuserdata(L, NULL);
-    }
-    break;
-
-  case ondemand::json_type::unknown:
-  default:
-    luaL_error(L, "simdjson::ondemand::json_type::unknown or unsupported type encountered");
-    break;
+    case ondemand::json_type::unknown:
+    default:
+      luaL_error(L,
+                 "simdjson::ondemand::json_type::unknown or unsupported type "
+                 "encountered");
+      break;
   }
 }
 
-static int parse(lua_State *L)
-{
+static int parse(lua_State* L) {
   size_t json_str_len;
-  const char *json_str = luaL_checklstring(L, 1, &json_str_len);
+  const char* json_str = luaL_checklstring(L, 1, &json_str_len);
 
   ondemand::document doc;
 
-  try
-  {
+  try {
     // Lua owns json_str and does not guarantee simdjson's required trailing
     // padding. Copy it into reusable padded storage before parsing.
     doc = ondemand_parser.iterate(
         copy_to_padded_buffer(L, json_str, json_str_len));
     convert_ondemand_element_to_table(L, doc);
-  }
-  catch (simdjson::simdjson_error &error)
-  {
+  } catch (simdjson::simdjson_error& error) {
     luaL_error(L, error.what());
   }
 
   return 1;
 }
 
-static int parse_file(lua_State *L)
-{
-  const char *json_file = luaL_checkstring(L, 1);
+static int parse_file(lua_State* L) {
+  const char* json_file = luaL_checkstring(L, 1);
 
   padded_string json_string;
   ondemand::document doc;
 
-  try
-  {
+  try {
     json_string = padded_string::load(json_file);
     doc = ondemand_parser.iterate(json_string);
     convert_ondemand_element_to_table(L, doc);
-  }
-  catch (simdjson::simdjson_error &error)
-  {
+  } catch (simdjson::simdjson_error& error) {
     luaL_error(L, error.what());
   }
 
   return 1;
 }
 
-static int active_implementation(lua_State *L)
-{
-  const auto &implementation = simdjson::get_active_implementation();
+static int active_implementation(lua_State* L) {
+  const auto& implementation = simdjson::get_active_implementation();
   std::string name = implementation->name();
   const std::string description = implementation->description();
   const std::string implementation_name = name + " (" + description + ")";
@@ -229,99 +207,84 @@ static int active_implementation(lua_State *L)
 
 // ParsedObject as C++ class
 #define LUA_MYOBJECT "ParsedObject"
-class ParsedObject
-{
-private:
+class ParsedObject {
+ private:
   simdjson::padded_string json_string;
   ondemand::document doc;
   std::unique_ptr<ondemand::parser> parser;
 
-public:
-  ParsedObject(const char *json_file)
+ public:
+  ParsedObject(const char* json_file)
       : json_string(padded_string::load(json_file)),
-        parser(new ondemand::parser{})
-  {
+        parser(new ondemand::parser{}) {
     this->doc = this->parser.get()->iterate(json_string);
   }
-  ParsedObject(const char *json_str, size_t json_str_len)
-      : json_string(json_str, json_str_len),
-        parser(new ondemand::parser{})
-  {
+  ParsedObject(const char* json_str, size_t json_str_len)
+      : json_string(json_str, json_str_len), parser(new ondemand::parser{}) {
     this->doc = this->parser.get()->iterate(json_string);
   }
   ~ParsedObject() {}
-  ondemand::document *get_doc() { return &(this->doc); }
+  ondemand::document* get_doc() { return &(this->doc); }
 };
 
-static int ParsedObject_delete(lua_State *L)
-{
-  delete *reinterpret_cast<ParsedObject **>(lua_touserdata(L, 1));
+static int ParsedObject_delete(lua_State* L) {
+  delete *reinterpret_cast<ParsedObject**>(lua_touserdata(L, 1));
   return 0;
 }
 
-static int ParsedObject_open(lua_State *L)
-{
+static int ParsedObject_open(lua_State* L) {
   size_t json_str_len;
-  const char *json_str = luaL_checklstring(L, 1, &json_str_len);
+  const char* json_str = luaL_checklstring(L, 1, &json_str_len);
 
-  try
-  {
-    ParsedObject **parsedObject =
-        (ParsedObject **)(lua_newuserdata(L, sizeof(ParsedObject *)));
+  try {
+    ParsedObject** parsedObject =
+        (ParsedObject**)(lua_newuserdata(L, sizeof(ParsedObject*)));
     *parsedObject = new ParsedObject(json_str, json_str_len);
     luaL_getmetatable(L, LUA_MYOBJECT);
     lua_setmetatable(L, -2);
-  }
-  catch (simdjson::simdjson_error &error)
-  {
+  } catch (simdjson::simdjson_error& error) {
     luaL_error(L, error.what());
   }
   return 1;
 }
 
-static int ParsedObject_open_file(lua_State *L)
-{
-  const char *json_file = luaL_checkstring(L, 1);
+static int ParsedObject_open_file(lua_State* L) {
+  const char* json_file = luaL_checkstring(L, 1);
 
-  try
-  {
-    ParsedObject **parsedObject =
-        (ParsedObject **)(lua_newuserdata(L, sizeof(ParsedObject *)));
+  try {
+    ParsedObject** parsedObject =
+        (ParsedObject**)(lua_newuserdata(L, sizeof(ParsedObject*)));
     *parsedObject = new ParsedObject(json_file);
     luaL_getmetatable(L, LUA_MYOBJECT);
     lua_setmetatable(L, -2);
-  }
-  catch (simdjson::simdjson_error &error)
-  {
+  } catch (simdjson::simdjson_error& error) {
     luaL_error(L, error.what());
   }
 
   return 1;
 }
 
-static int ParsedObject_atPointer(lua_State *L)
-{
-  ondemand::document *document =
-      (*reinterpret_cast<ParsedObject **>(luaL_checkudata(L, 1, LUA_MYOBJECT)))
+static int ParsedObject_atPointer(lua_State* L) {
+  ondemand::document* document =
+      (*reinterpret_cast<ParsedObject**>(luaL_checkudata(L, 1, LUA_MYOBJECT)))
           ->get_doc();
-  const char *pointer = luaL_checkstring(L, 2);
+  const char* pointer = luaL_checkstring(L, 2);
 
-  try
-  {
+  try {
     ondemand::value returned_element = document->at_pointer(pointer);
     convert_ondemand_element_to_table(L, returned_element);
-  }
-  catch (simdjson::simdjson_error &error)
-  {
+  } catch (simdjson::simdjson_error& error) {
     luaL_error(L, error.what());
   }
 
   return 1;
 }
 
-static int ParsedObject_newindex(lua_State *L)
-{
-  luaL_error(L, "This should be treated as a read-only table. We may one day add array access for the elements, and it'll likely not be modifiable.");
+static int ParsedObject_newindex(lua_State* L) {
+  luaL_error(
+      L,
+      "This should be treated as a read-only table. We may one day add array "
+      "access for the elements, and it'll likely not be modifiable.");
   return 1;
 }
 
@@ -332,8 +295,7 @@ static const struct luaL_Reg arraylib_m[] = {
     {"__gc", ParsedObject_delete},
     {NULL, NULL}};
 
-int luaopen_simdjson(lua_State *L)
-{
+int luaopen_simdjson(lua_State* L) {
   luaL_newmetatable(L, LUA_MYOBJECT);
   lua_pushvalue(L, -1); /* duplicates the metatable */
   lua_setfield(L, -2, "__index");
