@@ -289,7 +289,6 @@ static int ParsedObject_newindex(lua_State* L) {
 }
 
 static const struct luaL_Reg arraylib_m[] = {
-    {"at", ParsedObject_atPointer},
     {"atPointer", ParsedObject_atPointer},
     {"__newindex", ParsedObject_newindex},
     {"__gc", ParsedObject_delete},
