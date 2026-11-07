@@ -48,17 +48,18 @@ jobs:
           source lua_install/bin/activate
           luarocks make
 
+
+      - name: Run tests
+        run: |
+          source lua_install/bin/activate
+          luarocks test
+
       - name: Save Cache lua_install
         uses: actions/cache/save@v6
         with:
           path: |
             lua_install
           key: ${{ matrix.lua }}-${{ matrix.target }}-lua_install
-
-      - name: Run tests
-        run: |
-          source lua_install/bin/activate
-          luarocks test
 
   windows:
     strategy:
@@ -88,17 +89,17 @@ jobs:
           .\lua_install\bin\activate
           luarocks make
 
+      - name: Run tests
+        run: |
+          .\lua_install\bin\activate
+          luarocks test
+
       - name: Save Cache lua_install
         uses: actions/cache/save@v6
         with:
           path: |
             lua_install
           key: ${{ matrix.lua }}-${{ matrix.target }}-lua_install
-
-      - name: Run tests
-        run: |
-          .\lua_install\bin\activate
-          luarocks test
 
   sanitizers:
     runs-on: ubuntu-latest
