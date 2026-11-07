@@ -1,6 +1,6 @@
 name: CI
 
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
   lua:
@@ -48,6 +48,13 @@ jobs:
           source lua_install/bin/activate
           luarocks make
 
+      - name: Save Cache lua_install
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            lua_install
+          key: ${{ matrix.lua }}-${{ matrix.target }}-lua_install
+
       - name: Run tests
         run: |
           source lua_install/bin/activate
@@ -80,6 +87,13 @@ jobs:
         run: |
           .\lua_install\bin\activate
           luarocks make
+
+      - name: Save Cache lua_install
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            lua_install
+          key: ${{ matrix.lua }}-${{ matrix.target }}-lua_install
 
       - name: Run tests
         run: |
