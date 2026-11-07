@@ -1,4 +1,7 @@
 local simdjson = require("simdjson")
+local tested = require("tested")
+
+t = tested.new()
 
 local function random_string()
     local bytes = {}
@@ -33,13 +36,14 @@ local function random_value(depth)
     end
 end
 
-describe("simdjson.encode randomized inputs", function()
-    it("always emits parseable JSON for supported acyclic values", function()
-        math.randomseed(109)
-        for _ = 1, 1000 do
-            local encoded = simdjson.encode(random_value(4))
-            local ok, error_message = pcall(simdjson.parse, encoded)
-            assert.is_true(ok, error_message)
-        end
-    end)
+t:test("simdjson.encode randomized inputs", function()
+    math.randomseed(109)
+    for _ = 1, 1000 do
+        local encoded = simdjson.encode(random_value(4))
+        local ok, error_message = pcall(simdjson.parse, encoded)
+        tested.assert({given="randomized input", should="pcall should return true", actual=ok, expected=true})
+        tested.assert_truthy({given="randomized input", should="emit parseable JSON for supported acyclic values", actual=error_message ~= nil})
+    end
 end)
+
+return t

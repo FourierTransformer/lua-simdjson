@@ -42,9 +42,7 @@ jobs:
       - name: Run tests
         run: |
           source lua_install/bin/activate
-          luarocks install lua-cjson2
-          luarocks install busted
-          busted --verbose
+          luarocks test
 
   windows:
     strategy:
@@ -67,9 +65,7 @@ jobs:
       - name: Run tests
         run: |
           .\lua_install\bin\activate
-          luarocks install lua-cjson2
-          luarocks install busted
-          busted --verbose
+          luarocks test
 
   sanitizers:
     runs-on: ubuntu-latest
@@ -90,9 +86,7 @@ jobs:
       - name: Run tests with sanitizers
         run: |
           source lua_install/bin/activate
-          luarocks install lua-cjson2
-          luarocks install busted
           export LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(g++ -print-file-name=libstdc++.so):$(gcc -print-file-name=libubsan.so)"
           export ASAN_OPTIONS="detect_leaks=1:halt_on_error=1"
           export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
-          busted --verbose
+          luarocks test
