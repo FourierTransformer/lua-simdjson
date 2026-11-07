@@ -34,7 +34,7 @@ jobs:
         with:
           path: |
             lua_install
-          key: ${{ matrix.lua }}-${{ runner.os }}-lua_install
+          key: ${{ matrix.lua }}-${{ runner.os }}-${{ runner.arch }}-lua_install
 
       - name: Install Lua (${{ matrix.lua }})
         run: |
@@ -59,7 +59,7 @@ jobs:
         with:
           path: |
             lua_install
-          key: ${{ matrix.lua }}-${{ runner.os }}-lua_install
+          key: ${{ matrix.lua }}-${{ runner.os }}-${{ runner.arch }}-lua_install
 
   windows:
     strategy:
