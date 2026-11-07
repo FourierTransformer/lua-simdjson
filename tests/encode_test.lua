@@ -3,12 +3,15 @@ local simdjson = require("simdjson")
 local tested = require("tested")
 t = tested.new()
 
+print("Getting _VERSION")
 local major, minor = _VERSION:match('([%d]+)%.(%d+)')
 
 local original_max_depth
 local original_buffer_size
 
+print("setting up before/after each methods")
 t:before_each(function()
+    print("inside before_each")
     original_max_depth = simdjson.getMaxEncodeDepth()
     original_buffer_size = simdjson.getEncodeBufferSize()
 end)
@@ -19,6 +22,7 @@ t:after_each(function()
 end)
 
 t:test("encodes scalar values", function()
+    print("Should be inside first test")
     tested.assert{expected = '"value"', actual = simdjson.encode("value")}
     tested.assert{expected = 42, actual = simdjson.parse(simdjson.encode(42))}
     tested.assert{expected = "1.5", actual = simdjson.encode(1.5)}
