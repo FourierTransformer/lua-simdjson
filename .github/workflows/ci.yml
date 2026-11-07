@@ -59,7 +59,7 @@ jobs:
         with:
           path: |
             lua_install
-          key: ${{ matrix.lua }}-${{ matrix.target }}-lua_install
+          key: ${{ matrix.lua }}-${{ runner.os }}-lua_install
 
   windows:
     strategy:
