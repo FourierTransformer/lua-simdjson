@@ -3,15 +3,12 @@ local simdjson = require("simdjson")
 local tested = require("tested")
 t = tested.new()
 
-print("Getting _VERSION")
 local major, minor = _VERSION:match('([%d]+)%.(%d+)')
 
 local original_max_depth
 local original_buffer_size
 
-print("setting up before/after each methods")
 t:before_each(function()
-    print("inside before_each")
     original_max_depth = simdjson.getMaxEncodeDepth()
     original_buffer_size = simdjson.getEncodeBufferSize()
 end)
@@ -22,7 +19,6 @@ t:after_each(function()
 end)
 
 t:test("encodes scalar values", function()
-    print("Should be inside first test")
     tested.assert{expected = '"value"', actual = simdjson.encode("value")}
     tested.assert{expected = 42, actual = simdjson.parse(simdjson.encode(42))}
     tested.assert{expected = "1.5", actual = simdjson.encode(1.5)}
@@ -141,23 +137,11 @@ t:test("rejects unsupported values and invalid options", function()
 end)
 
 t:test("preserves embedded NUL bytes", function()
-    print("NUL bytes test")
     local value = "before\0after"
     tested.assert{actual = value, expected = simdjson.parse(simdjson.encode(value))}
 end)
 
 t:test("rejects non-finite numbers", function()
-    print("non-finite numbers test")
-    local v = 0/0
-    print("value:", v)
-    print("tostring:", tostring(v))
-    print("type:", type(v))
-    print("is number:", type(v) == "number")
-    if _VERSION == "Lua 5.3" or _VERSION == "Lua 5.4" or _VERSION == "Lua 5.5" then
-        print("math type:", math.type(v))
-    end
-    print("raw tostring:", string.format("%.17g", v))
-
     for _, value in ipairs({0 / 0, math.huge, -math.huge}) do
         tested.assert_throws_exception{actual = function()
             simdjson.encode(value)
@@ -166,7 +150,6 @@ t:test("rejects non-finite numbers", function()
 end)
 
 t:test("rejects direct and indirect table cycles", function()
-    print("direct and indirect table cycles")
     local direct = {}
     direct.self = direct
 
