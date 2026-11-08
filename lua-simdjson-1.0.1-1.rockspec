@@ -1,9 +1,13 @@
+rockspec_format = "3.0"
+
 package="lua-simdjson"
-version="1.0.0-1"
+version="1.0.1-1"
+
 source = {
    url = "git://github.com/FourierTransformer/lua-simdjson",
-   tag = "1.0.0"
+   tag = "1.0.1"
 }
+
 description = {
    summary = "This is a simple Lua binding for simdjson",
    detailed = [[
@@ -12,9 +16,17 @@ description = {
    homepage = "https://github.com/FourierTransformer/lua-simdjson",
    license = "Apache-2.0"
 }
+
 dependencies = {
    "lua >= 5.1, < 5.6"
 }
+
+test_dependencies = { "tested == 0.5.0", "lua-cjson" }
+
+test = {
+   type = "tested",
+}
+
 build = {
    type = "make",
    build_variables = {

@@ -1,6 +1,6 @@
 name: CI
 
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
   lua:
@@ -29,22 +29,37 @@ jobs:
         run: |
           sudo apt-get install -y libreadline-dev
 
+      - name: Cache lua_install
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            lua_install
+          key: ${{ matrix.lua }}-${{ runner.os }}-${{ runner.arch }}-lua_install
+
       - name: Install Lua (${{ matrix.lua }})
         run: |
           pip install git+https://github.com/luarocks/hererocks
           hererocks lua_install -r^ --${{ matrix.lua }}
         env:
           MACOSX_DEPLOYMENT_TARGET: 11.0
+
       - name: Build lua-simdjson
         run: |
           source lua_install/bin/activate
           luarocks make
+
+
       - name: Run tests
         run: |
           source lua_install/bin/activate
-          luarocks install lua-cjson2
-          luarocks install busted
-          busted --verbose
+          luarocks test
+
+      - name: Save Cache lua_install
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            lua_install
+          key: ${{ matrix.lua }}-${{ runner.os }}-${{ runner.arch }}-lua_install
 
   windows:
     strategy:
@@ -56,43 +71,61 @@ jobs:
     steps:
       # Checks-out the repository under $GITHUB_WORKSPACE.
       - uses: actions/checkout@v6
+
+      - name: Cache lua_install
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            lua_install
+          key: ${{ matrix.lua }}-${{ matrix.target }}-lua_install
+
       - name: Install Lua (${{ matrix.lua }})
         run: |
           pip install git+https://github.com/luarocks/hererocks
           hererocks lua_install -r^ --${{ matrix.lua }} --target ${{ matrix.target }}
+
       - name: Build lua-simdjson
         run: |
           .\lua_install\bin\activate
           luarocks make
+
       - name: Run tests
         run: |
           .\lua_install\bin\activate
-          luarocks install lua-cjson2
-          luarocks install busted
-          busted --verbose
+          luarocks test -- --debug DEBUG
+
+      - name: Save Cache lua_install
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            lua_install
+          key: ${{ matrix.lua }}-${{ matrix.target }}-lua_install
 
   sanitizers:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libreadline-dev
           pip install git+https://github.com/luarocks/hererocks
           hererocks lua_install -r^ --lua=5.4
+
       - name: Build with AddressSanitizer and UndefinedBehaviorSanitizer
         run: |
           source lua_install/bin/activate
           luarocks config variables.LIBFLAG -- "-shared -fsanitize=address,undefined"
           CFLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
           luarocks make
+
       - name: Run tests with sanitizers
         run: |
           source lua_install/bin/activate
-          luarocks install lua-cjson2
-          luarocks install busted
+          luarocks install lua-cjson
+          luarocks install tested
           export LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(g++ -print-file-name=libstdc++.so):$(gcc -print-file-name=libubsan.so)"
           export ASAN_OPTIONS="detect_leaks=1:halt_on_error=1"
           export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
-          busted --verbose
+          tested

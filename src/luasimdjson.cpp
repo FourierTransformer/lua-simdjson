@@ -12,7 +12,7 @@
 #include "luasimdjson.h"
 
 #define LUA_SIMDJSON_NAME "simdjson"
-#define LUA_SIMDJSON_VERSION "1.0.0"
+#define LUA_SIMDJSON_VERSION "1.0.1"
 
 using namespace simdjson;
 
