@@ -148,6 +148,9 @@ end)
 
 t:test("rejects non-finite numbers", function()
     print("non-finite numbers test")
+    print(0/0)
+    print(math.huge)
+    print(-math.huge)
     for _, value in ipairs({0 / 0, math.huge, -math.huge}) do
         tested.assert_throws_exception{actual = function()
             simdjson.encode(value)
