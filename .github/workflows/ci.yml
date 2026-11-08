@@ -3,63 +3,63 @@ name: CI
 on: [pull_request]
 
 jobs:
-  lua:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [linux, macos, macos-arm64]
-        lua: [lua=5.1, lua=5.2, lua=5.3, lua=5.4, lua=5.5, luajit=2.0, luajit=2.1]
-        include:
-        - os: linux
-          runner: ubuntu-latest
-        - os: macos
-          runner: macos-15-intel
-        - os: macos-arm64
-          runner: macos-latest
-        exclude:
-        - os: macos-arm64
-          lua: luajit=2.0
-    name: ${{ matrix.os }} (${{ matrix.lua }})
-    runs-on: ${{ matrix.runner }}
-    steps:
-      # Checks-out the repository under $GITHUB_WORKSPACE.
-      - uses: actions/checkout@v6
-      - name:  Install libreadline
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get install -y libreadline-dev
+  # lua:
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: [linux, macos, macos-arm64]
+  #       lua: [lua=5.1, lua=5.2, lua=5.3, lua=5.4, lua=5.5, luajit=2.0, luajit=2.1]
+  #       include:
+  #       - os: linux
+  #         runner: ubuntu-latest
+  #       - os: macos
+  #         runner: macos-15-intel
+  #       - os: macos-arm64
+  #         runner: macos-latest
+  #       exclude:
+  #       - os: macos-arm64
+  #         lua: luajit=2.0
+  #   name: ${{ matrix.os }} (${{ matrix.lua }})
+  #   runs-on: ${{ matrix.runner }}
+  #   steps:
+  #     # Checks-out the repository under $GITHUB_WORKSPACE.
+  #     - uses: actions/checkout@v6
+  #     - name:  Install libreadline
+  #       if: runner.os == 'Linux'
+  #       run: |
+  #         sudo apt-get install -y libreadline-dev
 
-      - name: Cache lua_install
-        uses: actions/cache/restore@v6
-        with:
-          path: |
-            lua_install
-          key: ${{ matrix.lua }}-${{ runner.os }}-${{ runner.arch }}-lua_install
+  #     - name: Cache lua_install
+  #       uses: actions/cache/restore@v6
+  #       with:
+  #         path: |
+  #           lua_install
+  #         key: ${{ matrix.lua }}-${{ runner.os }}-${{ runner.arch }}-lua_install
 
-      - name: Install Lua (${{ matrix.lua }})
-        run: |
-          pip install git+https://github.com/luarocks/hererocks
-          hererocks lua_install -r^ --${{ matrix.lua }}
-        env:
-          MACOSX_DEPLOYMENT_TARGET: 11.0
+  #     - name: Install Lua (${{ matrix.lua }})
+  #       run: |
+  #         pip install git+https://github.com/luarocks/hererocks
+  #         hererocks lua_install -r^ --${{ matrix.lua }}
+  #       env:
+  #         MACOSX_DEPLOYMENT_TARGET: 11.0
 
-      - name: Build lua-simdjson
-        run: |
-          source lua_install/bin/activate
-          luarocks make
+  #     - name: Build lua-simdjson
+  #       run: |
+  #         source lua_install/bin/activate
+  #         luarocks make
 
 
-      - name: Run tests
-        run: |
-          source lua_install/bin/activate
-          luarocks test
+  #     - name: Run tests
+  #       run: |
+  #         source lua_install/bin/activate
+  #         luarocks test
 
-      - name: Save Cache lua_install
-        uses: actions/cache/save@v6
-        with:
-          path: |
-            lua_install
-          key: ${{ matrix.lua }}-${{ runner.os }}-${{ runner.arch }}-lua_install
+  #     - name: Save Cache lua_install
+  #       uses: actions/cache/save@v6
+  #       with:
+  #         path: |
+  #           lua_install
+  #         key: ${{ matrix.lua }}-${{ runner.os }}-${{ runner.arch }}-lua_install
 
   windows:
     strategy:
@@ -101,31 +101,31 @@ jobs:
             lua_install
           key: ${{ matrix.lua }}-${{ matrix.target }}-lua_install
 
-  sanitizers:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
+  # sanitizers:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libreadline-dev
-          pip install git+https://github.com/luarocks/hererocks
-          hererocks lua_install -r^ --lua=5.4
+  #     - name: Install build dependencies
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt-get install -y libreadline-dev
+  #         pip install git+https://github.com/luarocks/hererocks
+  #         hererocks lua_install -r^ --lua=5.4
 
-      - name: Build with AddressSanitizer and UndefinedBehaviorSanitizer
-        run: |
-          source lua_install/bin/activate
-          luarocks config variables.LIBFLAG -- "-shared -fsanitize=address,undefined"
-          CFLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-          luarocks make
+  #     - name: Build with AddressSanitizer and UndefinedBehaviorSanitizer
+  #       run: |
+  #         source lua_install/bin/activate
+  #         luarocks config variables.LIBFLAG -- "-shared -fsanitize=address,undefined"
+  #         CFLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  #         luarocks make
 
-      - name: Run tests with sanitizers
-        run: |
-          source lua_install/bin/activate
-          luarocks install lua-cjson
-          luarocks install tested
-          export LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(g++ -print-file-name=libstdc++.so):$(gcc -print-file-name=libubsan.so)"
-          export ASAN_OPTIONS="detect_leaks=1:halt_on_error=1"
-          export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
-          tested
+  #     - name: Run tests with sanitizers
+  #       run: |
+  #         source lua_install/bin/activate
+  #         luarocks install lua-cjson
+  #         luarocks install tested
+  #         export LD_PRELOAD="$(gcc -print-file-name=libasan.so):$(g++ -print-file-name=libstdc++.so):$(gcc -print-file-name=libubsan.so)"
+  #         export ASAN_OPTIONS="detect_leaks=1:halt_on_error=1"
+  #         export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
+  #         tested

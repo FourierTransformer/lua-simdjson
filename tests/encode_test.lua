@@ -148,9 +148,16 @@ end)
 
 t:test("rejects non-finite numbers", function()
     print("non-finite numbers test")
-    print(0/0)
-    print(math.huge)
-    print(-math.huge)
+    local v = 0/0
+    print("value:", v)
+    print("tostring:", tostring(v))
+    print("type:", type(v))
+    print("is number:", type(v) == "number")
+    if _VERSION == "Lua 5.3" or _VERSION == "Lua 5.4" or _VERSION == "Lua 5.5" then
+        print("math type:", math.type(v))
+    end
+    print("raw tostring:", string.format("%.17g", v))
+
     for _, value in ipairs({0 / 0, math.huge, -math.huge}) do
         tested.assert_throws_exception{actual = function()
             simdjson.encode(value)
