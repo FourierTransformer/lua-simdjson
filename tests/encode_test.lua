@@ -141,11 +141,13 @@ t:test("rejects unsupported values and invalid options", function()
 end)
 
 t:test("preserves embedded NUL bytes", function()
+    print("NUL bytes test")
     local value = "before\0after"
     tested.assert{actual = value, expected = simdjson.parse(simdjson.encode(value))}
 end)
 
 t:test("rejects non-finite numbers", function()
+    print("non-finite numbers test")
     for _, value in ipairs({0 / 0, math.huge, -math.huge}) do
         tested.assert_throws_exception{actual = function()
             simdjson.encode(value)
@@ -154,6 +156,7 @@ t:test("rejects non-finite numbers", function()
 end)
 
 t:test("rejects direct and indirect table cycles", function()
+    print("direct and indirect table cycles")
     local direct = {}
     direct.self = direct
 
