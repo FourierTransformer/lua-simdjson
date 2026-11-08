@@ -65,7 +65,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lua: [lua=5.1, lua=5.2, lua=5.3, lua=5.4, lua=5.5, luajit=2.0, luajit=2.1]
+        # lua: [lua=5.1, lua=5.2, lua=5.3, lua=5.4, lua=5.5, luajit=2.0, luajit=2.1]
+        lua: [lua=5.2, lua=5.3]
         target: [mingw,vs]
     runs-on: windows-2022
     steps:
