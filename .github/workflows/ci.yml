@@ -92,7 +92,7 @@ jobs:
       - name: Run tests
         run: |
           .\lua_install\bin\activate
-          luarocks test -- --debug DEBUG
+          luarocks test
 
       - name: Save Cache lua_install
         uses: actions/cache/save@v6
