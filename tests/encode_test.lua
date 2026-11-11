@@ -178,6 +178,170 @@ t:test("recovers after encoding errors", function()
     tested.assert{expected = '{"valid":true}', actual = simdjson.encode({valid = true})}
 end)
 
+t:test("rejects NaN and infinity in scalar form", function()
+    local test_values = {
+        {value = 0 / 0, name = "NaN"},
+        {value = math.huge, name = "positive infinity"},
+        {value = -math.huge, name = "negative infinity"},
+    }
+
+    for _, test in ipairs(test_values) do
+        local success, err = pcall(function()
+            simdjson.encode(test.value)
+        end)
+        tested.assert{expected = false, actual = success}
+        tested.assert{expected = true, actual = tostring(err):match("cannot encode NaN or infinity as JSON") ~= nil}
+    end
+end)
+
+t:test("rejects NaN and infinity nested in arrays", function()
+    local test_values = {
+        {1, 0 / 0, 3},
+        {0 / 0},
+        {1, 2, math.huge},
+        {1, 2, -math.huge},
+    }
+
+    for _, array in ipairs(test_values) do
+        local success, err = pcall(function()
+            simdjson.encode(array)
+        end)
+        tested.assert{expected = false, actual = success}
+        tested.assert{expected = true, actual = tostring(err):match("cannot encode NaN or infinity as JSON") ~= nil}
+    end
+end)
+
+t:test("rejects NaN and infinity nested in objects", function()
+    local test_values = {
+        {a = 1, b = 0 / 0, c = 3},
+        {nan = 0 / 0},
+        {inf = math.huge},
+        {ninf = -math.huge},
+    }
+
+    for _, obj in ipairs(test_values) do
+        local success, err = pcall(function()
+            simdjson.encode(obj)
+        end)
+        tested.assert{expected = false, actual = success}
+        tested.assert{expected = true, actual = tostring(err):match("cannot encode NaN or infinity as JSON") ~= nil}
+    end
+end)
+
+t:test("rejects non-finite numeric object keys", function()
+    local success1, err1 = pcall(function()
+        simdjson.encode({[math.huge] = "value"})
+    end)
+    tested.assert{expected = false, actual = success1}
+    tested.assert{expected = true, actual = tostring(err1):match("cannot encode NaN or infinity as JSON") ~= nil}
+
+    local success2, err2 = pcall(function()
+        simdjson.encode({[-math.huge] = "value"})
+    end)
+    tested.assert{expected = false, actual = success2}
+    tested.assert{expected = true, actual = tostring(err2):match("cannot encode NaN or infinity as JSON") ~= nil}
+end)
+
+t:test("recovers after NaN/infinity errors", function()
+    -- Single error recovery
+    tested.assert_throws_exception{actual = function()
+        simdjson.encode(0 / 0)
+    end}
+    tested.assert{expected = '{"valid":true}', actual = simdjson.encode({valid = true})}
+
+    -- Multiple distinct errors in sequence
+    tested.assert_throws_exception{actual = function()
+        simdjson.encode(math.huge)
+    end}
+    tested.assert{expected = '{"valid":true}', actual = simdjson.encode({valid = true})}
+
+    tested.assert_throws_exception{actual = function()
+        simdjson.encode({nested = 0 / 0})
+    end}
+    tested.assert{expected = '{"valid":true}', actual = simdjson.encode({valid = true})}
+end)
+
+t:test("rejects unsupported keys, values, and depth with a recoverable error", function()
+    -- Every encoder error is raised from inside the serializer's C++ frames.
+    -- Exercise each distinct error site so the native Windows (MSVC) runs
+    -- also cover Lua errors raised after builder appends (issue #117).
+    local function nested_object(depth, leaf)
+        local root = {}
+        local current = root
+        for _ = 1, depth do
+            current.child = {}
+            current = current.child
+        end
+        current.leaf = leaf
+        return root
+    end
+
+    local function nested_array(depth, leaf)
+        local root = {}
+        local current = root
+        for _ = 1, depth do
+            current[1] = {}
+            current = current[1]
+        end
+        current[1] = leaf
+        return root
+    end
+
+    local cases = {
+        {name = "boolean key", pattern = "unsupported key type",
+         build = function() return {[true] = 1} end},
+        {name = "table key", pattern = "unsupported key type",
+         build = function() return {[{}] = 1} end},
+        {name = "function key", pattern = "unsupported key type",
+         build = function() return {[print] = 1} end},
+        {name = "function value", pattern = "unsupported Lua data type",
+         build = function() return {value = print} end},
+        {name = "userdata value", pattern = "unsupported Lua data type",
+         build = function() return {value = io.stdout} end},
+        {name = "thread value", pattern = "unsupported Lua data type",
+         build = function() return {value = coroutine.create(function() end)} end},
+        {name = "function in array", pattern = "unsupported Lua data type",
+         build = function() return {1, 2, print} end},
+        {name = "boolean key after valid entries", pattern = "unsupported key type",
+         build = function() return {a = 1, b = 2, [false] = 3} end},
+        {name = "boolean key nested in object", pattern = "unsupported key type",
+         build = function() return nested_object(5, {[true] = 1}) end},
+        {name = "function nested in array", pattern = "unsupported Lua data type",
+         build = function() return nested_array(5, print) end},
+        {name = "cycle nested in object", pattern = "cyclic table",
+         build = function()
+             local root = nested_object(3, nil)
+             root.child.child.child.loop = root
+             return root
+         end},
+        {name = "depth exceeded in objects", pattern = "maximum nesting depth exceeded",
+         options = {maxDepth = 4},
+         build = function() return nested_object(10, 1) end},
+        {name = "depth exceeded in arrays", pattern = "maximum nesting depth exceeded",
+         options = {maxDepth = 4},
+         build = function() return nested_array(10, 1) end},
+    }
+
+    for _, case in ipairs(cases) do
+        -- Repeat so one bad unwind or leaked builder state cannot hide.
+        for _ = 1, 50 do
+            local success, err = pcall(function()
+                if case.options then
+                    return simdjson.encode(case.build(), case.options)
+                end
+                return simdjson.encode(case.build())
+            end)
+            tested.assert{expected = false, actual = success, message = case.name}
+            tested.assert{
+                expected = true,
+                actual = tostring(err):find(case.pattern, 1, true) ~= nil,
+                message = case.name .. ": " .. tostring(err),
+            }
+        end
+        tested.assert{expected = '{"valid":true}', actual = simdjson.encode({valid = true})}
+    end
+end)
+
 t:test("rejects overflowing configuration values", function()
     tested.assert_throws_exception{actual = function()
         simdjson.setMaxEncodeDepth(4294967297)
