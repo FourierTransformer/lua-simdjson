@@ -36,6 +36,7 @@ enum class encode_status
   unsupported_key_type,
   unsupported_value_type,
   unsupported_lightuserdata,
+  stack_overflow,
   allocation_failed,
   builder_error,
   invalid_utf8,
@@ -270,6 +271,13 @@ static int get_table_array_size(lua_State *L, int table_index)
 static bool serialize_data(lua_State *L, int value_index,
                            encode_context &context);
 
+// Lua stack slots reserved before serializing each table: a pending key and
+// value from lua_next, the array element pushed by lua_rawgeti, and the two
+// transient slots used while measuring the array part. A C function is only
+// guaranteed LUA_MINSTACK (20) free slots, so nesting deeper than a few
+// levels overflowed the Lua stack without this.
+#define ENCODE_STACK_SLOTS_PER_TABLE 8
+
 static bool serialize_append_number(lua_State *L, int index,
                                     encode_context &context)
 {
@@ -406,6 +414,10 @@ static bool serialize_data(lua_State *L, int value_index,
     {
       return false;
     }
+    if (!lua_checkstack(L, ENCODE_STACK_SLOTS_PER_TABLE))
+    {
+      return fail(context, encode_status::stack_overflow);
+    }
     int array_size = get_table_array_size(L, value_index);
     bool serialized =
         array_size > 0
@@ -523,6 +535,8 @@ int encode(lua_State *L)
                       lua_typename(L, outcome.detail));
   case encode_status::unsupported_lightuserdata:
     return luaL_error(L, "unsupported lightuserdata value for serialization");
+  case encode_status::stack_overflow:
+    return luaL_error(L, "cannot encode: Lua stack overflow");
   case encode_status::allocation_failed:
     return luaL_error(L, "failed to allocate JSON encoder");
   case encode_status::builder_error:

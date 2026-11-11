@@ -342,6 +342,45 @@ t:test("rejects unsupported keys, values, and depth with a recoverable error", f
     end
 end)
 
+t:test("encodes nesting up to the depth limit without exhausting the Lua stack", function()
+    -- Each level of nesting needs Lua stack slots. A C function is only
+    -- guaranteed LUA_MINSTACK (20), so the serializer must reserve more
+    -- before descending (checked with an API-checked Lua build).
+    local limit = simdjson.getMaxEncodeDepth()
+
+    local function nested_objects(tables)
+        local value = {}
+        local current = value
+        for _ = 2, tables do
+            current.a = {}
+            current = current.a
+        end
+        return value, string.rep('{"a":', tables - 1) .. "{}" .. string.rep("}", tables - 1)
+    end
+
+    local function nested_arrays(tables)
+        local value = {}
+        local current = value
+        for _ = 2, tables do
+            current[1] = {}
+            current = current[1]
+        end
+        return value, string.rep("[", tables - 1) .. "{}" .. string.rep("]", tables - 1)
+    end
+
+    for _, tables in ipairs({10, 25, 64, limit}) do
+        local object_value, object_json = nested_objects(tables)
+        tested.assert{expected = object_json, actual = simdjson.encode(object_value), message = "objects " .. tables}
+        local array_value, array_json = nested_arrays(tables)
+        tested.assert{expected = array_json, actual = simdjson.encode(array_value), message = "arrays " .. tables}
+    end
+
+    local too_deep = nested_objects(limit + 1)
+    local success, err = pcall(simdjson.encode, too_deep)
+    tested.assert{expected = false, actual = success}
+    tested.assert{expected = true, actual = tostring(err):find("maximum nesting depth exceeded", 1, true) ~= nil}
+end)
+
 t:test("rejects overflowing configuration values", function()
     tested.assert_throws_exception{actual = function()
         simdjson.setMaxEncodeDepth(4294967297)
