@@ -21,13 +21,42 @@ namespace
 thread_local std::unique_ptr<simdjson::builder::string_builder> encode_buffer;
 thread_local size_t encode_buffer_size = 0;
 
+// Serialization failures are reported as plain data and raised as Lua errors
+// by encode() only after every C++ serializer frame has returned. A Lua error
+// is a longjmp, and on MSVC a longjmp unwinds through the C++ frames it skips
+// using their compiler-generated unwind state. With simdjson's inlined
+// noexcept builder code in those frames that unwind reached terminate()
+// (0xC0000409, issue #117). No serializer code calls luaL_error.
+enum class encode_status
+{
+  ok,
+  non_finite_number,
+  cyclic_table,
+  depth_exceeded,
+  unsupported_key_type,
+  unsupported_value_type,
+  unsupported_lightuserdata,
+  allocation_failed,
+  builder_error,
+  invalid_utf8,
+};
+
 struct encode_context
 {
   simdjson::builder::string_builder &builder;
   int max_depth;
   const void *active_tables[MAX_ENCODE_DEPTH];
   int active_table_count;
+  encode_status status = encode_status::ok;
+  int detail = 0; // Lua type tag or depth limit, depending on status
 };
+
+static bool fail(encode_context &context, encode_status status, int detail = 0)
+{
+  context.status = status;
+  context.detail = detail;
+  return false;
+}
 
 static int absolute_index(lua_State *L, int index)
 {
@@ -238,25 +267,26 @@ static int get_table_array_size(lua_State *L, int table_index)
   return entry_count == hint ? hint : -1;
 }
 
-static void serialize_data(lua_State *L, int value_index,
+static bool serialize_data(lua_State *L, int value_index,
                            encode_context &context);
 
-static void serialize_append_number(lua_State *L, int index,
+static bool serialize_append_number(lua_State *L, int index,
                                     encode_context &context)
 {
 #if LUA_VERSION_NUM >= 503
   if (lua_isinteger(L, index))
   {
     context.builder.append(lua_tointeger(L, index));
-    return;
+    return true;
   }
 #endif
   lua_Number value = lua_tonumber(L, index);
   if (!std::isfinite(value))
   {
-    luaL_error(L, "cannot encode NaN or infinity as JSON");
+    return fail(context, encode_status::non_finite_number);
   }
   context.builder.append(value);
+  return true;
 }
 
 static void serialize_append_string(lua_State *L, int index,
@@ -268,7 +298,7 @@ static void serialize_append_string(lua_State *L, int index,
       std::string_view(value, length));
 }
 
-static void enter_table(lua_State *L, int table_index,
+static bool enter_table(lua_State *L, int table_index,
                         encode_context &context)
 {
   const void *identity = lua_topointer(L, table_index);
@@ -276,18 +306,18 @@ static void enter_table(lua_State *L, int table_index,
   {
     if (context.active_tables[i] == identity)
     {
-      luaL_error(L, "cannot encode a cyclic table");
+      return fail(context, encode_status::cyclic_table);
     }
   }
   if (context.active_table_count >= context.max_depth)
   {
-    luaL_error(L, "maximum nesting depth exceeded (limit: %d)",
-               context.max_depth);
+    return fail(context, encode_status::depth_exceeded, context.max_depth);
   }
   context.active_tables[context.active_table_count++] = identity;
+  return true;
 }
 
-static void serialize_append_array(lua_State *L, int table_index,
+static bool serialize_append_array(lua_State *L, int table_index,
                                    int array_size, encode_context &context)
 {
   table_index = absolute_index(L, table_index);
@@ -299,13 +329,17 @@ static void serialize_append_array(lua_State *L, int table_index,
       context.builder.append_comma();
     }
     lua_rawgeti(L, table_index, i);
-    serialize_data(L, -1, context);
+    if (!serialize_data(L, -1, context))
+    {
+      return false;
+    }
     lua_pop(L, 1);
   }
   context.builder.end_array();
+  return true;
 }
 
-static void serialize_append_object(lua_State *L, int table_index,
+static bool serialize_append_object(lua_State *L, int table_index,
                                     encode_context &context)
 {
   table_index = absolute_index(L, table_index);
@@ -329,69 +363,126 @@ static void serialize_append_object(lua_State *L, int table_index,
     else if (key_type == LUA_TNUMBER)
     {
       context.builder.append('"');
-      serialize_append_number(L, -2, context);
+      if (!serialize_append_number(L, -2, context))
+      {
+        return false;
+      }
       context.builder.append('"');
     }
     else
     {
-      luaL_error(L, "unsupported key type in table for serialization: %s",
-                 lua_typename(L, key_type));
+      return fail(context, encode_status::unsupported_key_type, key_type);
     }
 
     context.builder.append_colon();
-    serialize_data(L, -1, context);
+    if (!serialize_data(L, -1, context))
+    {
+      return false;
+    }
     lua_pop(L, 1);
   }
   context.builder.end_object();
+  return true;
 }
 
-static void serialize_data(lua_State *L, int value_index,
+static bool serialize_data(lua_State *L, int value_index,
                            encode_context &context)
 {
   value_index = absolute_index(L, value_index);
-  switch (lua_type(L, value_index))
+  int value_type = lua_type(L, value_index);
+  switch (value_type)
   {
   case LUA_TSTRING:
     serialize_append_string(L, value_index, context);
-    break;
+    return true;
   case LUA_TNUMBER:
-    serialize_append_number(L, value_index, context);
-    break;
+    return serialize_append_number(L, value_index, context);
   case LUA_TBOOLEAN:
     context.builder.append(lua_toboolean(L, value_index) != 0);
-    break;
+    return true;
   case LUA_TTABLE:
   {
-    enter_table(L, value_index, context);
-    int array_size = get_table_array_size(L, value_index);
-    if (array_size > 0)
+    if (!enter_table(L, value_index, context))
     {
-      serialize_append_array(L, value_index, array_size, context);
+      return false;
     }
-    else
+    int array_size = get_table_array_size(L, value_index);
+    bool serialized =
+        array_size > 0
+            ? serialize_append_array(L, value_index, array_size, context)
+            : serialize_append_object(L, value_index, context);
+    if (!serialized)
     {
-      serialize_append_object(L, value_index, context);
+      return false;
     }
     context.active_table_count--;
-    break;
+    return true;
   }
   case LUA_TNIL:
     context.builder.append_null();
-    break;
+    return true;
   case LUA_TLIGHTUSERDATA:
     if (lua_touserdata(L, value_index) == NULL)
     {
       context.builder.append_null();
+      return true;
     }
-    else
-    {
-      luaL_error(L, "unsupported lightuserdata value for serialization");
-    }
-    break;
+    return fail(context, encode_status::unsupported_lightuserdata);
   default:
-    luaL_error(L, "unsupported Lua data type for serialization: %s",
-               lua_typename(L, lua_type(L, value_index)));
+    return fail(context, encode_status::unsupported_value_type, value_type);
   }
+}
+
+// Everything that touches the builder runs here and returns plain data. The
+// noinline attribute keeps this body out of encode(), whose frame must stay
+// free of C++ unwind state because it is the one place that raises Lua errors.
+#if defined(_MSC_VER)
+#define LUA_SIMDJSON_NOINLINE __declspec(noinline)
+#else
+#define LUA_SIMDJSON_NOINLINE __attribute__((noinline))
+#endif
+
+struct encode_outcome
+{
+  encode_status status;
+  int detail;
+  const char *text; // JSON bytes (ok) or a static simdjson error message
+  size_t length;
+};
+
+static LUA_SIMDJSON_NOINLINE encode_outcome
+encode_value(lua_State *L, int max_depth, size_t desired_buffer_size)
+{
+  if (!encode_buffer || encode_buffer_size != desired_buffer_size)
+  {
+    auto *replacement = new (std::nothrow)
+        simdjson::builder::string_builder(desired_buffer_size);
+    if (replacement == nullptr)
+    {
+      return {encode_status::allocation_failed, 0, nullptr, 0};
+    }
+    encode_buffer.reset(replacement);
+    encode_buffer_size = desired_buffer_size;
+  }
+
+  encode_buffer->clear();
+  encode_context context{*encode_buffer, max_depth, {}, 0};
+  if (!serialize_data(L, 1, context))
+  {
+    return {context.status, context.detail, nullptr, 0};
+  }
+
+  std::string_view json;
+  auto error = encode_buffer->view().get(json);
+  if (error)
+  {
+    return {encode_status::builder_error, 0, simdjson::error_message(error), 0};
+  }
+  if (!encode_buffer->validate_unicode())
+  {
+    return {encode_status::invalid_utf8, 0, nullptr, 0};
+  }
+  return {encode_status::ok, 0, json.data(), json.size()};
 }
 } // namespace
 
@@ -409,36 +500,37 @@ int encode(lua_State *L)
     parse_encode_options(L, 2, max_depth, desired_buffer_size);
   }
 
-  if (!encode_buffer || encode_buffer_size != desired_buffer_size)
+  // No C++ object with a destructor lives in this frame, so raising a Lua
+  // error (longjmp) below has no C++ unwind state to trip over.
+  encode_outcome outcome = encode_value(L, max_depth, desired_buffer_size);
+  switch (outcome.status)
   {
-    auto *replacement = new (std::nothrow)
-        simdjson::builder::string_builder(desired_buffer_size);
-    if (replacement == nullptr)
-    {
-      return luaL_error(L, "failed to allocate JSON encoder");
-    }
-    encode_buffer.reset(replacement);
-    encode_buffer_size = desired_buffer_size;
-  }
-
-  encode_buffer->clear();
-  encode_context context{*encode_buffer, max_depth, {}, 0};
-  serialize_data(L, 1, context);
-
-  std::string_view json;
-  auto error = encode_buffer->view().get(json);
-  if (error)
-  {
-    return luaL_error(L, "failed to build JSON: %s",
-                      simdjson::error_message(error));
-  }
-  if (!encode_buffer->validate_unicode())
-  {
+  case encode_status::ok:
+    lua_pushlstring(L, outcome.text, outcome.length);
+    return 1;
+  case encode_status::non_finite_number:
+    return luaL_error(L, "cannot encode NaN or infinity as JSON");
+  case encode_status::cyclic_table:
+    return luaL_error(L, "cannot encode a cyclic table");
+  case encode_status::depth_exceeded:
+    return luaL_error(L, "maximum nesting depth exceeded (limit: %d)",
+                      outcome.detail);
+  case encode_status::unsupported_key_type:
+    return luaL_error(L, "unsupported key type in table for serialization: %s",
+                      lua_typename(L, outcome.detail));
+  case encode_status::unsupported_value_type:
+    return luaL_error(L, "unsupported Lua data type for serialization: %s",
+                      lua_typename(L, outcome.detail));
+  case encode_status::unsupported_lightuserdata:
+    return luaL_error(L, "unsupported lightuserdata value for serialization");
+  case encode_status::allocation_failed:
+    return luaL_error(L, "failed to allocate JSON encoder");
+  case encode_status::builder_error:
+    return luaL_error(L, "failed to build JSON: %s", outcome.text);
+  case encode_status::invalid_utf8:
     return luaL_error(L, "encoded JSON contains invalid UTF-8 sequences");
   }
-
-  lua_pushlstring(L, json.data(), json.size());
-  return 1;
+  return luaL_error(L, "unknown encoder failure");
 }
 
 int set_max_encode_depth(lua_State *L)
