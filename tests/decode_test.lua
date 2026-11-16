@@ -801,6 +801,10 @@ t:test("isolates active decoder state from reentrant parse and parseFile calls i
             end)
             coroutine.resume(co)
             co_abort_active = false
+            local caps_before_reclaim = simdjson._debugDecodeCapacities()
+            if caps_before_reclaim.inUse ~= false then
+                unexpected_errors = unexpected_errors + 1
+            end
             local reclaimed = simdjson.parse('{"reclaimed":true}', {bufferSize = 2048})
             local caps_live_err_co = simdjson._debugDecodeCapacities()
             if reclaimed.reclaimed ~= true or caps_live_err_co.inUse ~= false or caps_live_err_co.parseBuffer ~= 2048 + 64 then
@@ -1077,6 +1081,47 @@ t:test("repairs partially initialized internal metatables and safely formats act
     local impl = simdjson.activeImplementation()
     tested.assert({expected = "string", actual = type(impl)})
     tested.assert({expected = true, actual = impl:match("^.+ %(.+%)$") ~= nil})
+end)
+
+t:test("prevents finalized VM lease from re-binding TLS decoder state during LIFO shutdown", function()
+    local reg = debug.getregistry()
+    local lease_meta = reg["simdjson.decode_vm_lease"]
+    tested.assert({expected = "table", actual = type(lease_meta)})
+
+    -- Reset TLS buffer to 0 then prime it to 1024 + 64
+    local big = '{"pad":"' .. string.rep("a", 4096) .. '"}'
+    simdjson.parse(big, {bufferSize = 1024})
+    simdjson.parse('{"prime":true}', {bufferSize = 1024})
+    tested.assert({expected = 1024 + 64, actual = simdjson._debugDecodeCapacities().parseBuffer})
+
+    local lease_key = nil
+    local lease_ud = nil
+    for k, v in pairs(reg) do
+        if type(k) == "userdata" and type(v) == "userdata" and debug.getmetatable(v) == lease_meta then
+            lease_key = k
+            lease_ud = v
+            break
+        end
+    end
+    tested.assert_truthy({actual = lease_ud})
+
+    -- Simulate lua_close LIFO finalization where decode_vm_lease_gc runs before
+    -- an earlier-created object's __gc finalizer calls simdjson.parse
+    lease_meta.__gc(lease_ud)
+
+    local post_gc = simdjson.parse('{"post_gc":true}', {bufferSize = 2048})
+    tested.assert({expected = true, actual = post_gc.post_gc})
+    -- Because lease_ud was finalized, the decode must use the fallback state
+    -- and leave tls_decode_state untouched (parseBuffer still 1024 + 64)
+    local caps_after_finalized = simdjson._debugDecodeCapacities()
+    tested.assert({expected = false, actual = caps_after_finalized.inUse})
+    tested.assert({expected = 1024 + 64, actual = caps_after_finalized.parseBuffer})
+
+    -- Re-initialize a fresh VM lease and verify normal TLS leasing resumes
+    reg[lease_key] = nil
+    local resumed = simdjson.parse('{"resumed":true}', {bufferSize = 2048})
+    tested.assert({expected = true, actual = resumed.resumed})
+    tested.assert({expected = 2048 + 64, actual = simdjson._debugDecodeCapacities().parseBuffer})
 end)
 
 return t

@@ -124,6 +124,7 @@ static int decode_active_thread_key_anchor = 0;
 
 struct decode_vm_lease {
   lua_State *active_thread;
+  bool finalized;
 };
 
 struct reusable_decode_state {
@@ -141,6 +142,7 @@ static int decode_vm_lease_gc(lua_State *L) {
   decode_vm_lease *vm_lease =
       reinterpret_cast<decode_vm_lease *>(lua_touserdata(L, 1));
   if (vm_lease != nullptr) {
+    vm_lease->finalized = true;
     vm_lease->active_thread = nullptr;
     if (tls_decode_state.owner_vm == vm_lease) {
       tls_decode_state.in_use = false;
@@ -182,6 +184,7 @@ static decode_vm_lease *ensure_decode_vm_lease(lua_State *L) {
   vm_lease = reinterpret_cast<decode_vm_lease *>(
       lua_newuserdata(L, sizeof(decode_vm_lease)));
   vm_lease->active_thread = nullptr;
+  vm_lease->finalized = false;
   luaL_newmetatable(L, LUA_SIMDJSON_DECODE_LEASE_META);
   lua_pushcfunction(L, decode_vm_lease_gc);
   lua_setfield(L, -2, "__gc");
@@ -195,18 +198,26 @@ static decode_vm_lease *ensure_decode_vm_lease(lua_State *L) {
 }
 
 static void write_active_decode_thread(decode_vm_lease *vm_lease, lua_State *L,
-                                       bool active) noexcept {
-  if (vm_lease == nullptr || L == nullptr) {
+                                       bool active) {
+  if (vm_lease == nullptr) {
+    return;
+  }
+  if (!active) {
+    vm_lease->active_thread = nullptr;
+    if (L == nullptr || lua_status(L) != 0 || !lua_checkstack(L, 2)) {
+      return;
+    }
+    lua_pushlightuserdata(L, &decode_active_thread_key_anchor);
+    lua_pushboolean(L, 0);
+    lua_rawset(L, LUA_REGISTRYINDEX);
+    return;
+  }
+  if (L == nullptr || !lua_checkstack(L, 2)) {
     return;
   }
   lua_pushlightuserdata(L, &decode_active_thread_key_anchor);
-  if (active) {
-    lua_pushthread(L);
-    vm_lease->active_thread = L;
-  } else {
-    lua_pushboolean(L, 0);
-    vm_lease->active_thread = nullptr;
-  }
+  lua_pushthread(L);
+  vm_lease->active_thread = L;
   lua_rawset(L, LUA_REGISTRYINDEX);
 }
 
@@ -244,8 +255,11 @@ struct decode_state_lease {
             ? tls_decode_state.owner_vm->active_thread
             : nullptr;
     int start_level = (prev_thread == L) ? 1 : 0;
-    if (!tls_decode_state.in_use ||
-        !is_decode_active_on_call_stack(prev_thread, start_level)) {
+    bool can_use_tls =
+        (vm_lease != nullptr && !vm_lease->finalized) &&
+        (!tls_decode_state.in_use ||
+         !is_decode_active_on_call_stack(prev_thread, start_level));
+    if (can_use_tls) {
       if (tls_decode_state.owner_vm != nullptr &&
           tls_decode_state.owner_vm != vm_lease &&
           tls_decode_state.owner_vm->active_thread != nullptr) {
@@ -278,7 +292,7 @@ struct decode_state_lease {
     }
   }
 
-  ~decode_state_lease() noexcept {
+  ~decode_state_lease() {
     if (using_tls) {
       write_active_decode_thread(owner_vm, lease_thread, false);
       tls_decode_state.in_use = false;
@@ -877,6 +891,7 @@ static int get_decode_buffer_size(lua_State *L) {
 }
 
 static int debug_decode_capacities(lua_State *L) {
+  decode_vm_lease *caller_vm = ensure_decode_vm_lease(L);
   lua_State *active_thread =
       (tls_decode_state.in_use && tls_decode_state.owner_vm != nullptr)
           ? tls_decode_state.owner_vm->active_thread
@@ -885,8 +900,10 @@ static int debug_decode_capacities(lua_State *L) {
   bool in_use = tls_decode_state.in_use &&
                 is_decode_active_on_call_stack(active_thread, start_level);
   if (tls_decode_state.in_use && !in_use) {
-    if (tls_decode_state.owner_vm != nullptr && active_thread != nullptr) {
-      write_active_decode_thread(tls_decode_state.owner_vm, active_thread,
+    if (tls_decode_state.owner_vm != nullptr) {
+      lua_State *cleanup_thread =
+          (tls_decode_state.owner_vm == caller_vm) ? L : active_thread;
+      write_active_decode_thread(tls_decode_state.owner_vm, cleanup_thread,
                                  false);
     }
     tls_decode_state.in_use = false;
