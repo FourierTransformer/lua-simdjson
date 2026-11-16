@@ -446,6 +446,14 @@ convert_ondemand_scalar_to_table(lua_State *L, T &element,
   case ondemand::json_type::number: {
     ondemand::number number;
     if (auto error = element.get_number().get(number); error) {
+      if (error == simdjson::BIGINT_ERROR) {
+        double value = 0;
+        if (auto dbl_error = element.get_double().get(value); dbl_error) {
+          return fail_simdjson(context, dbl_error);
+        }
+        lua_pushnumber(L, value);
+        return true;
+      }
       return fail_simdjson(context, error);
     }
     ondemand::number_type number_type = number.get_number_type();
@@ -464,7 +472,15 @@ convert_ondemand_scalar_to_table(lua_State *L, T &element,
       if (auto error = element.get_int64().get(value); error) {
         return fail_simdjson(context, error);
       }
-      lua_pushinteger(L, value);
+#if defined(LUA_MAXINTEGER) && defined(LUA_MININTEGER)
+      if (value < LUA_MININTEGER || value > LUA_MAXINTEGER) {
+        lua_pushnumber(L, static_cast<lua_Number>(value));
+      } else {
+        lua_pushinteger(L, static_cast<lua_Integer>(value));
+      }
+#else
+      lua_pushnumber(L, static_cast<lua_Number>(value));
+#endif
       break;
     }
 
@@ -696,6 +712,7 @@ parse_value(lua_State *L, decode_vm_lease *vm_lease, const char *json_str,
   if (json_str_len > 0) {
     std::memcpy(state.parse_buffer.get(), json_str, json_str_len);
   }
+  std::memset(state.parse_buffer.get() + json_str_len, 0, SIMDJSON_PADDING);
   simdjson::padded_string_view padded_view(
       state.parse_buffer.get(), json_str_len, state.parse_buffer_capacity);
 

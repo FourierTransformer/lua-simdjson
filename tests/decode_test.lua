@@ -847,4 +847,44 @@ t:test("isolates active decoder state from reentrant parse and parseFile calls i
     end
 end)
 
+t:test("decodes big integers beyond 64-bit range as floats and preserves 53-bit integer precision", function()
+    local pos_big = simdjson.parse("18446744073709551616")
+    tested.assert({expected = 18446744073709551616.0, actual = pos_big})
+    local neg_big = simdjson.parse("-9223372036854775809")
+    tested.assert({expected = -9223372036854775809.0, actual = neg_big})
+
+    local nested_big = simdjson.parse(
+        '{"pos":18446744073709551616,"neg":-9223372036854775809,"arr":[10000000000000000000000000,1.5]}'
+    )
+    tested.assert({expected = 18446744073709551616.0, actual = nested_big.pos})
+    tested.assert({expected = -9223372036854775809.0, actual = nested_big.neg})
+    tested.assert({expected = 1e25, actual = nested_big.arr[1]})
+    tested.assert({expected = 1.5, actual = nested_big.arr[2]})
+
+    local opened_big = simdjson.open('{"big":18446744073709551616}')
+    tested.assert({expected = 18446744073709551616.0, actual = opened_big:atPointer("/big")})
+    tested.assert({expected = 18446744073709551616.0, actual = opened_big:atPointer("").big})
+
+    if math.type then
+        tested.assert({expected = "float", actual = math.type(pos_big)})
+        tested.assert({expected = "float", actual = math.type(neg_big)})
+        tested.assert({expected = "float", actual = math.type(nested_big.arr[1])})
+    end
+
+    -- Exact 53-bit integer boundaries across all Lua versions (5.1-5.5 and LuaJIT)
+    local exact_53 = simdjson.parse(
+        '{"p53":9007199254740992,"p53m1":9007199254740991,"n53":-9007199254740992,"n53p1":-9007199254740991,"i33":5000000000}'
+    )
+    tested.assert({expected = 9007199254740992, actual = exact_53.p53})
+    tested.assert({expected = 9007199254740991, actual = exact_53.p53m1})
+    tested.assert({expected = -9007199254740992, actual = exact_53.n53})
+    tested.assert({expected = -9007199254740991, actual = exact_53.n53p1})
+    tested.assert({expected = 5000000000, actual = exact_53.i33})
+
+    -- Overflowing >308-digit integer must still fail as NUMBER_ERROR
+    local huge_overflow = string.rep("9", 400)
+    tested.assert_throws_exception({actual = function() simdjson.parse(huge_overflow) end})
+    tested.assert_throws_exception({actual = function() simdjson.parse("[" .. huge_overflow .. "]") end})
+end)
+
 return t
