@@ -44,6 +44,7 @@ enum class decode_status {
   stack_overflow,
   input_too_large,
   allocation_failed,
+  object_in_use,
 };
 
 struct decode_outcome {
@@ -91,6 +92,8 @@ static int raise_decode_error(lua_State *L, const decode_outcome &outcome) {
     return luaL_error(L, "JSON input is too large");
   case decode_status::allocation_failed:
     return luaL_error(L, "failed to allocate JSON parse buffer");
+  case decode_status::object_in_use:
+    return luaL_error(L, "ParsedObject is already being traversed");
   }
   return luaL_error(L, "unknown decoder failure");
 }
@@ -915,6 +918,30 @@ static int active_implementation(lua_State *L) {
 
 // ParsedObject as C++ class
 #define LUA_MYOBJECT "ParsedObject"
+static int ParsedObject_atPointer(lua_State *L);
+
+static int count_cfunction_frames_on_call_stack(lua_State *L, int start_level,
+                                                lua_CFunction target) {
+  if (L == nullptr || lua_status(L) != 0) {
+    return 0;
+  }
+  int count = 0;
+  lua_Debug ar;
+  for (int level = start_level; lua_getstack(L, level, &ar) != 0; ++level) {
+    if (!lua_checkstack(L, 1)) {
+      return count + 1;
+    }
+    if (lua_getinfo(L, "f", &ar) != 0) {
+      lua_CFunction fn = lua_tocfunction(L, -1);
+      lua_pop(L, 1);
+      if (fn == target) {
+        ++count;
+      }
+    }
+  }
+  return count;
+}
+
 class ParsedObject {
 private:
   simdjson::padded_string json_string;
@@ -924,8 +951,27 @@ private:
   ParsedObject() = default;
 
 public:
+  bool in_use = false;
+  int active_depth = 0;
+  int active_thread_ref = LUA_NOREF;
+  lua_State *active_thread = nullptr;
+
   ~ParsedObject() = default;
   ondemand::document *get_doc() { return &(this->doc); }
+
+  void set_active_thread(lua_State *L) {
+    lua_pushthread(L);
+    active_thread_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    active_thread = L;
+  }
+
+  void clear_active_thread(lua_State *L) {
+    if (active_thread_ref != LUA_NOREF && L != nullptr) {
+      luaL_unref(L, LUA_REGISTRYINDEX, active_thread_ref);
+      active_thread_ref = LUA_NOREF;
+    }
+    active_thread = nullptr;
+  }
 
   static LUA_SIMDJSON_NOINLINE decode_outcome create_from_string(
       const char *json_str, size_t json_str_len, ParsedObject **out) noexcept {
@@ -995,6 +1041,7 @@ public:
 static int ParsedObject_delete(lua_State *L) {
   ParsedObject **slot = reinterpret_cast<ParsedObject **>(lua_touserdata(L, 1));
   if (slot != nullptr && *slot != nullptr) {
+    (*slot)->clear_active_thread(L);
     delete *slot;
     *slot = nullptr;
   }
@@ -1037,9 +1084,44 @@ static int ParsedObject_open_file(lua_State *L) {
   return 1;
 }
 
+struct parsed_object_lease {
+  ParsedObject *obj;
+  lua_State *lease_thread;
+  bool acquired;
+
+  parsed_object_lease(lua_State *L, ParsedObject *target)
+      : obj(target), lease_thread(L), acquired(false) {
+    lua_State *prev_thread = target->active_thread;
+    int start_level = (prev_thread == L) ? 1 : 0;
+    int active_frames = count_cfunction_frames_on_call_stack(
+        prev_thread, start_level, ParsedObject_atPointer);
+    if (!target->in_use || active_frames < target->active_depth) {
+      target->clear_active_thread(L);
+      target->set_active_thread(L);
+      target->active_depth =
+          count_cfunction_frames_on_call_stack(L, 0, ParsedObject_atPointer);
+      target->in_use = true;
+      acquired = true;
+    }
+  }
+
+  ~parsed_object_lease() {
+    if (acquired && obj != nullptr) {
+      obj->clear_active_thread(lease_thread);
+      obj->in_use = false;
+      obj->active_depth = 0;
+    }
+  }
+};
+
 static LUA_SIMDJSON_NOINLINE decode_outcome
-at_pointer_value(lua_State *L, ondemand::document *document,
-                 const char *pointer, size_t pointer_len, int max_depth) {
+at_pointer_value(lua_State *L, ParsedObject *object_holder, const char *pointer,
+                 size_t pointer_len, int max_depth) {
+  parsed_object_lease lease(L, object_holder);
+  if (!lease.acquired) {
+    return {decode_status::object_in_use, simdjson::SUCCESS, 0};
+  }
+  ondemand::document *document = object_holder->get_doc();
   decode_context context{max_depth};
   if (pointer_len == 0) {
     if (!document->is_alive()) {
@@ -1076,7 +1158,7 @@ static int ParsedObject_atPointer(lua_State *L) {
   if (slot == nullptr || *slot == nullptr) {
     return luaL_error(L, "invalid ParsedObject");
   }
-  ondemand::document *document = (*slot)->get_doc();
+  ParsedObject *object_holder = *slot;
   size_t pointer_len = 0;
   const char *pointer = luaL_checklstring(L, 2, &pointer_len);
 
@@ -1090,7 +1172,7 @@ static int ParsedObject_atPointer(lua_State *L) {
 
   const int initial_top = lua_gettop(L);
   decode_outcome outcome =
-      at_pointer_value(L, document, pointer, pointer_len, max_depth);
+      at_pointer_value(L, object_holder, pointer, pointer_len, max_depth);
   if (outcome.status != decode_status::ok) {
     lua_settop(L, initial_top);
     return raise_decode_error(L, outcome);

@@ -887,4 +887,158 @@ t:test("decodes big integers beyond 64-bit range as floats and preserves 53-bit 
     tested.assert_throws_exception({actual = function() simdjson.parse("[" .. huge_overflow .. "]") end})
 end)
 
+t:test("guards ParsedObject:atPointer against reentrant traversal in __gc finalizers", function()
+    local newproxy_fn = rawget(_G, "newproxy")
+    local function make_gc_canary(callback)
+        if newproxy_fn then
+            local proxy = newproxy_fn(true)
+            getmetatable(proxy).__gc = callback
+            return proxy
+        end
+        return setmetatable({}, {__gc = callback})
+    end
+
+    local items = {}
+    for i = 1, 400 do
+        items[i] = string.format('{"idx":%d,"label":"item_%04d_%s"}', i, i, string.rep("z", 64))
+    end
+    local valid_json = "[" .. table.concat(items, ",") .. "]"
+    local partially_invalid_json =
+        '[{"items":[' .. table.concat(items, ",") .. ']},{"x":[1},{"after":"crash"}]'
+
+    local doc = simdjson.open(valid_json)
+    local bad_doc = simdjson.open(partially_invalid_json)
+    local other_doc = simdjson.openFile("jsonexamples/small/demo.json")
+
+    local ok_inc, prev_gc_mode = pcall(collectgarbage, "incremental")
+    local ok_pause, old_pause = pcall(collectgarbage, "setpause", 50)
+    local ok_step, old_step = pcall(collectgarbage, "setstepmul", 150)
+    local ok_param_pause, old_param_pause = pcall(collectgarbage, "param", "pause", 50)
+    local ok_param_step, old_param_step = pcall(collectgarbage, "param", "stepmul", 150)
+    collectgarbage("collect")
+
+    local ok_run, run_err = pcall(function()
+        local active_target = nil
+        local active_ptr = nil
+        local reentrant_rejected = 0
+        local bad_reentrant_rejected = 0
+        local unexpected_errors = 0
+
+        local function gc_callback()
+            if active_target then
+                local ok_re, err_re = pcall(active_target.atPointer, active_target, active_ptr)
+                if not ok_re and tostring(err_re):find("ParsedObject is already being traversed", 1, true) then
+                    if active_target == doc then
+                        reentrant_rejected = reentrant_rejected + 1
+                    elseif active_target == bad_doc then
+                        bad_reentrant_rejected = bad_reentrant_rejected + 1
+                    end
+                end
+            end
+            local width = other_doc:atPointer("/Image/Width")
+            if width ~= 800 then
+                unexpected_errors = unexpected_errors + 1
+            end
+        end
+
+        local valid_iters = 0
+        while reentrant_rejected == 0 and valid_iters < 50 do
+            valid_iters = valid_iters + 1
+            collectgarbage("stop")
+            local batch = {}
+            for i = 1, 200 do
+                batch[i] = make_gc_canary(gc_callback)
+            end
+            batch = nil
+            active_target = doc
+            active_ptr = "/0/idx"
+            collectgarbage("restart")
+            local ok_outer, res_outer = pcall(doc.atPointer, doc, "")
+            active_target = nil
+            if not ok_outer or #res_outer ~= 400 or res_outer[1].idx ~= 1 or res_outer[400].idx ~= 400 then
+                unexpected_errors = unexpected_errors + 1
+            end
+        end
+
+        collectgarbage("collect")
+
+        local bad_iters = 0
+        while bad_reentrant_rejected == 0 and bad_iters < 50 do
+            bad_iters = bad_iters + 1
+            collectgarbage("stop")
+            local batch = {}
+            for i = 1, 200 do
+                batch[i] = make_gc_canary(gc_callback)
+            end
+            batch = nil
+            active_target = bad_doc
+            active_ptr = "/1/x"
+            collectgarbage("restart")
+            local ok_outer, res_outer = pcall(bad_doc.atPointer, bad_doc, "/0/items")
+            active_target = nil
+            if not ok_outer or #res_outer ~= 400 or res_outer[1].idx ~= 1 or res_outer[400].idx ~= 400 then
+                unexpected_errors = unexpected_errors + 1
+            end
+        end
+
+        do
+            local co_abort_active = false
+            local co = coroutine.create(function()
+                collectgarbage("stop")
+                local batch = {}
+                for i = 1, 200 do
+                    batch[i] = make_gc_canary(function()
+                        if co_abort_active then
+                            co_abort_active = false
+                            error("abort atPointer from finalizer")
+                        end
+                    end)
+                end
+                batch = nil
+                co_abort_active = true
+                collectgarbage("restart")
+                return doc:atPointer("")
+            end)
+            coroutine.resume(co)
+            co_abort_active = false
+            local after_co = doc:atPointer("/0/idx")
+            if after_co ~= 1 then
+                unexpected_errors = unexpected_errors + 1
+            end
+            co = nil
+            collectgarbage("collect")
+            collectgarbage("collect")
+            local full_after_co = doc:atPointer("")
+            if #full_after_co ~= 400 or full_after_co[400].idx ~= 400 then
+                unexpected_errors = unexpected_errors + 1
+            end
+        end
+
+        tested.assert({expected = 0, actual = unexpected_errors})
+        tested.assert({expected = true, actual = reentrant_rejected > 0})
+        tested.assert({expected = true, actual = bad_reentrant_rejected > 0})
+    end)
+
+    if ok_pause and type(old_pause) == "number" and old_pause > 0 then
+        pcall(collectgarbage, "setpause", old_pause)
+    end
+    if ok_step and type(old_step) == "number" and old_step > 0 then
+        pcall(collectgarbage, "setstepmul", old_step)
+    end
+    if ok_param_pause and type(old_param_pause) == "number" and old_param_pause > 0 then
+        pcall(collectgarbage, "param", "pause", old_param_pause)
+    end
+    if ok_param_step and type(old_param_step) == "number" and old_param_step > 0 then
+        pcall(collectgarbage, "param", "stepmul", old_param_step)
+    end
+    if ok_inc and prev_gc_mode == "generational" then
+        pcall(collectgarbage, "generational")
+    end
+    collectgarbage("collect")
+
+    if not ok_run then
+        error(run_err, 0)
+    end
+end)
+
 return t
