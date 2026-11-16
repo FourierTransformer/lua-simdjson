@@ -1041,4 +1041,42 @@ t:test("guards ParsedObject:atPointer against reentrant traversal in __gc finali
     end
 end)
 
+t:test("repairs partially initialized internal metatables and safely formats activeImplementation", function()
+    local reg = debug.getregistry()
+    local fallback_meta = reg["simdjson.fallback_decode_state"]
+    local lease_meta = reg["simdjson.decode_vm_lease"]
+    tested.assert({expected = "table", actual = type(fallback_meta)})
+    tested.assert({expected = "table", actual = type(lease_meta)})
+
+    local lease_key = nil
+    local saved_lease_ud = nil
+    for k, v in pairs(reg) do
+        if type(k) == "userdata" and type(v) == "userdata" and debug.getmetatable(v) == lease_meta then
+            lease_key = k
+            saved_lease_ud = v
+            break
+        end
+    end
+    tested.assert_truthy({actual = lease_key})
+
+    -- Simulate LUA_ERRMEM interrupting ensure_decode_vm_lease after luaL_newmetatable
+    -- registered the tables in LUA_REGISTRYINDEX but before __gc was assigned
+    fallback_meta.__gc = nil
+    lease_meta.__gc = nil
+    reg[lease_key] = nil
+
+    local ok_parse, parsed = pcall(simdjson.parse, '{"ok":true}')
+    if not reg[lease_key] and saved_lease_ud then
+        reg[lease_key] = saved_lease_ud
+    end
+    tested.assert({expected = true, actual = ok_parse})
+    tested.assert({expected = true, actual = parsed.ok})
+    tested.assert({expected = "function", actual = type(reg["simdjson.fallback_decode_state"].__gc)})
+    tested.assert({expected = "function", actual = type(reg["simdjson.decode_vm_lease"].__gc)})
+
+    local impl = simdjson.activeImplementation()
+    tested.assert({expected = "string", actual = type(impl)})
+    tested.assert({expected = true, actual = impl:match("^.+ %(.+%)$") ~= nil})
+end)
+
 return t

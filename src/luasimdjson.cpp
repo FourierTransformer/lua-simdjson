@@ -174,19 +174,17 @@ static decode_vm_lease *ensure_decode_vm_lease(lua_State *L) {
   lua_pushboolean(L, 0);
   lua_rawset(L, LUA_REGISTRYINDEX);
 
-  if (luaL_newmetatable(L, LUA_SIMDJSON_FALLBACK_STATE_META) != 0) {
-    lua_pushcfunction(L, fallback_decode_state_gc);
-    lua_setfield(L, -2, "__gc");
-  }
+  luaL_newmetatable(L, LUA_SIMDJSON_FALLBACK_STATE_META);
+  lua_pushcfunction(L, fallback_decode_state_gc);
+  lua_setfield(L, -2, "__gc");
   lua_pop(L, 1);
 
   vm_lease = reinterpret_cast<decode_vm_lease *>(
       lua_newuserdata(L, sizeof(decode_vm_lease)));
   vm_lease->active_thread = nullptr;
-  if (luaL_newmetatable(L, LUA_SIMDJSON_DECODE_LEASE_META) != 0) {
-    lua_pushcfunction(L, decode_vm_lease_gc);
-    lua_setfield(L, -2, "__gc");
-  }
+  luaL_newmetatable(L, LUA_SIMDJSON_DECODE_LEASE_META);
+  lua_pushcfunction(L, decode_vm_lease_gc);
+  lua_setfield(L, -2, "__gc");
   lua_setmetatable(L, -2);
 
   lua_pushlightuserdata(L, &decode_vm_lease_key_anchor);
@@ -909,10 +907,44 @@ static int debug_decode_capacities(lua_State *L) {
   return 1;
 }
 
+static LUA_SIMDJSON_NOINLINE bool
+format_active_implementation(char *buffer, size_t buffer_size,
+                             size_t &out_length) noexcept {
+  out_length = 0;
+  if (buffer == nullptr || buffer_size == 0) {
+    return false;
+  }
+  try {
+    const auto &implementation = simdjson::get_active_implementation();
+    std::string name = implementation->name();
+    std::string description = implementation->description();
+    if (name.size() + description.size() + 3 >= buffer_size) {
+      return false;
+    }
+    size_t pos = 0;
+    std::memcpy(buffer + pos, name.data(), name.size());
+    pos += name.size();
+    buffer[pos++] = ' ';
+    buffer[pos++] = '(';
+    std::memcpy(buffer + pos, description.data(), description.size());
+    pos += description.size();
+    buffer[pos++] = ')';
+    buffer[pos] = '\0';
+    out_length = pos;
+    return true;
+  } catch (...) {
+    buffer[0] = '\0';
+    return false;
+  }
+}
+
 static int active_implementation(lua_State *L) {
-  const auto &implementation = simdjson::get_active_implementation();
-  lua_pushfstring(L, "%s (%s)", implementation->name().c_str(),
-                  implementation->description().c_str());
+  char buffer[256];
+  size_t length = 0;
+  if (!format_active_implementation(buffer, sizeof(buffer), length)) {
+    return luaL_error(L, "failed to retrieve active implementation");
+  }
+  lua_pushlstring(L, buffer, length);
   return 1;
 }
 
