@@ -939,8 +939,8 @@ t:test("guards ParsedObject:atPointer against reentrant traversal in __gc finali
                     end
                 end
             end
-            local width = other_doc:atPointer("/Image/Width")
-            if width ~= 800 then
+            local ok_img, img = pcall(other_doc.atPointer, other_doc, "/Image/Width")
+            if not ok_img or img ~= 800 then
                 unexpected_errors = unexpected_errors + 1
             end
         end
@@ -954,9 +954,9 @@ t:test("guards ParsedObject:atPointer against reentrant traversal in __gc finali
                 batch[i] = make_gc_canary(gc_callback)
             end
             batch = nil
+            collectgarbage("restart")
             active_target = doc
             active_ptr = "/0/idx"
-            collectgarbage("restart")
             local ok_outer, res_outer = pcall(doc.atPointer, doc, "")
             active_target = nil
             if not ok_outer or #res_outer ~= 400 or res_outer[1].idx ~= 1 or res_outer[400].idx ~= 400 then

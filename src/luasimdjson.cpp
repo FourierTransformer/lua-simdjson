@@ -121,6 +121,9 @@ static void luaL_setfuncs(lua_State *L, const luaL_Reg *l, int nup) {
 
 static int decode_vm_lease_key_anchor = 0;
 static int decode_active_thread_key_anchor = 0;
+static int max_decode_depth_key_anchor = 0;
+static int decode_buffer_size_key_anchor = 0;
+static int parsed_object_meta_key_anchor = 0;
 
 struct decode_vm_lease {
   lua_State *active_thread;
@@ -411,7 +414,7 @@ static void parse_decode_options(lua_State *L, int table_index, int &max_depth,
 }
 
 static int read_max_decode_depth(lua_State *L) {
-  lua_pushstring(L, LUA_SIMDJSON_MAX_DECODE_DEPTH_KEY);
+  lua_pushlightuserdata(L, &max_decode_depth_key_anchor);
   lua_rawget(L, LUA_REGISTRYINDEX);
   int max_depth = DEFAULT_MAX_DECODE_DEPTH;
   if (lua_type(L, -1) == LUA_TNUMBER) {
@@ -426,13 +429,13 @@ static int read_max_decode_depth(lua_State *L) {
 }
 
 static void write_max_decode_depth(lua_State *L, int max_depth) {
-  lua_pushstring(L, LUA_SIMDJSON_MAX_DECODE_DEPTH_KEY);
+  lua_pushlightuserdata(L, &max_decode_depth_key_anchor);
   lua_pushinteger(L, max_depth);
   lua_rawset(L, LUA_REGISTRYINDEX);
 }
 
 static size_t read_decode_buffer_size(lua_State *L) {
-  lua_pushstring(L, LUA_SIMDJSON_DECODE_BUFFER_SIZE_KEY);
+  lua_pushlightuserdata(L, &decode_buffer_size_key_anchor);
   lua_rawget(L, LUA_REGISTRYINDEX);
   size_t buffer_size = DEFAULT_DECODE_BUFFER_SIZE;
   if (lua_type(L, -1) == LUA_TNUMBER) {
@@ -447,7 +450,7 @@ static size_t read_decode_buffer_size(lua_State *L) {
 }
 
 static void write_decode_buffer_size(lua_State *L, size_t buffer_size) {
-  lua_pushstring(L, LUA_SIMDJSON_DECODE_BUFFER_SIZE_KEY);
+  lua_pushlightuserdata(L, &decode_buffer_size_key_anchor);
   lua_pushinteger(L, static_cast<lua_Integer>(buffer_size));
   lua_rawset(L, LUA_REGISTRYINDEX);
 }
@@ -1198,18 +1201,34 @@ at_pointer_value(lua_State *L, ParsedObject *object_holder, const char *pointer,
   return {decode_status::ok, simdjson::SUCCESS, 0};
 }
 
+static ParsedObject **check_parsed_object(lua_State *L, int index) {
+  void *ud = lua_touserdata(L, index);
+  if (ud != nullptr && lua_getmetatable(L, index) != 0) {
+    lua_pushlightuserdata(L, &parsed_object_meta_key_anchor);
+    lua_rawget(L, LUA_REGISTRYINDEX);
+    int equal = lua_rawequal(L, -1, -2);
+    lua_pop(L, 2);
+    if (equal != 0) {
+      return reinterpret_cast<ParsedObject **>(ud);
+    }
+  }
+  return reinterpret_cast<ParsedObject **>(
+      luaL_checkudata(L, index, LUA_MYOBJECT));
+}
+
 static int ParsedObject_atPointer(lua_State *L) {
   int argument_count = lua_gettop(L);
   luaL_argcheck(L, argument_count >= 2 && argument_count <= 3, 2,
                 "expected 2 or 3 arguments");
-  ParsedObject **slot =
-      reinterpret_cast<ParsedObject **>(luaL_checkudata(L, 1, LUA_MYOBJECT));
+  ParsedObject **slot = check_parsed_object(L, 1);
   if (slot == nullptr || *slot == nullptr) {
     return luaL_error(L, "invalid ParsedObject");
   }
   ParsedObject *object_holder = *slot;
   size_t pointer_len = 0;
-  const char *pointer = luaL_checklstring(L, 2, &pointer_len);
+  const char *pointer = (lua_type(L, 2) == LUA_TSTRING)
+                            ? lua_tolstring(L, 2, &pointer_len)
+                            : luaL_checklstring(L, 2, &pointer_len);
 
   int max_depth = read_max_decode_depth(L);
   size_t desired_buffer_size = read_decode_buffer_size(L);
@@ -1251,6 +1270,9 @@ int luaopen_simdjson(lua_State *L) {
   lua_pushvalue(L, -1); /* duplicates the metatable */
   lua_setfield(L, -2, "__index");
   luaL_setfuncs(L, arraylib_m, 0);
+  lua_pushlightuserdata(L, &parsed_object_meta_key_anchor);
+  lua_pushvalue(L, -2);
+  lua_rawset(L, LUA_REGISTRYINDEX);
   lua_pop(L, 1);
 
   // luaL_newlib(L, luasimdjson);
