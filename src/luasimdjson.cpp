@@ -124,6 +124,7 @@ static int decode_active_thread_key_anchor = 0;
 static int max_decode_depth_key_anchor = 0;
 static int decode_buffer_size_key_anchor = 0;
 static int parsed_object_meta_key_anchor = 0;
+static int parsed_object_threads_key_anchor = 0;
 
 struct decode_vm_lease {
   lua_State *active_thread;
@@ -1005,25 +1006,9 @@ private:
 public:
   bool in_use = false;
   int active_depth = 0;
-  int active_thread_ref = LUA_NOREF;
-  lua_State *active_thread = nullptr;
 
   ~ParsedObject() = default;
   ondemand::document *get_doc() { return &(this->doc); }
-
-  void set_active_thread(lua_State *L) {
-    lua_pushthread(L);
-    active_thread_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    active_thread = L;
-  }
-
-  void clear_active_thread(lua_State *L) {
-    if (active_thread_ref != LUA_NOREF && L != nullptr) {
-      luaL_unref(L, LUA_REGISTRYINDEX, active_thread_ref);
-      active_thread_ref = LUA_NOREF;
-    }
-    active_thread = nullptr;
-  }
 
   static LUA_SIMDJSON_NOINLINE decode_outcome create_from_string(
       const char *json_str, size_t json_str_len, ParsedObject **out) noexcept {
@@ -1090,10 +1075,60 @@ public:
   }
 };
 
+static void push_parsed_object_threads_table(lua_State *L) {
+  lua_pushlightuserdata(L, &parsed_object_threads_key_anchor);
+  lua_rawget(L, LUA_REGISTRYINDEX);
+  if (lua_istable(L, -1)) {
+    return;
+  }
+  lua_pop(L, 1);
+
+  lua_newtable(L);
+  lua_newtable(L);
+  lua_pushliteral(L, "v");
+  lua_setfield(L, -2, "__mode");
+  lua_setmetatable(L, -2);
+
+  lua_pushlightuserdata(L, &parsed_object_threads_key_anchor);
+  lua_pushvalue(L, -2);
+  lua_rawset(L, LUA_REGISTRYINDEX);
+}
+
+static lua_State *read_parsed_object_active_thread(lua_State *L,
+                                                   ParsedObject *target) {
+  if (L == nullptr || target == nullptr || !lua_checkstack(L, 3)) {
+    return nullptr;
+  }
+  push_parsed_object_threads_table(L);
+  lua_pushlightuserdata(L, target);
+  lua_rawget(L, -2);
+  lua_State *thread = lua_isthread(L, -1) ? lua_tothread(L, -1) : nullptr;
+  lua_pop(L, 2);
+  return thread;
+}
+
+static void write_parsed_object_active_thread(lua_State *L,
+                                              ParsedObject *target,
+                                              bool active) {
+  if (L == nullptr || target == nullptr || lua_status(L) != 0 ||
+      !lua_checkstack(L, 3)) {
+    return;
+  }
+  push_parsed_object_threads_table(L);
+  lua_pushlightuserdata(L, target);
+  if (active) {
+    lua_pushthread(L);
+  } else {
+    lua_pushnil(L);
+  }
+  lua_rawset(L, -3);
+  lua_pop(L, 1);
+}
+
 static int ParsedObject_delete(lua_State *L) {
   ParsedObject **slot = reinterpret_cast<ParsedObject **>(lua_touserdata(L, 1));
   if (slot != nullptr && *slot != nullptr) {
-    (*slot)->clear_active_thread(L);
+    write_parsed_object_active_thread(L, *slot, false);
     delete *slot;
     *slot = nullptr;
   }
@@ -1143,23 +1178,23 @@ struct parsed_object_lease {
 
   parsed_object_lease(lua_State *L, ParsedObject *target)
       : obj(target), lease_thread(L), acquired(false) {
-    lua_State *prev_thread = target->active_thread;
+    lua_State *prev_thread =
+        target->in_use ? read_parsed_object_active_thread(L, target) : nullptr;
     int start_level = (prev_thread == L) ? 1 : 0;
     int active_frames = count_cfunction_frames_on_call_stack(
         prev_thread, start_level, ParsedObject_atPointer);
     if (!target->in_use || active_frames < target->active_depth) {
-      target->clear_active_thread(L);
-      target->set_active_thread(L);
       target->active_depth =
           count_cfunction_frames_on_call_stack(L, 0, ParsedObject_atPointer);
       target->in_use = true;
+      write_parsed_object_active_thread(L, target, true);
       acquired = true;
     }
   }
 
   ~parsed_object_lease() {
     if (acquired && obj != nullptr) {
-      obj->clear_active_thread(lease_thread);
+      write_parsed_object_active_thread(lease_thread, obj, false);
       obj->in_use = false;
       obj->active_depth = 0;
     }
@@ -1265,6 +1300,8 @@ static const struct luaL_Reg arraylib_m[] = {
 
 int luaopen_simdjson(lua_State *L) {
   ensure_decode_vm_lease(L);
+  push_parsed_object_threads_table(L);
+  lua_pop(L, 1);
 
   luaL_newmetatable(L, LUA_MYOBJECT);
   lua_pushvalue(L, -1); /* duplicates the metatable */

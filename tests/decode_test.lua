@@ -1018,6 +1018,48 @@ t:test("guards ParsedObject:atPointer against reentrant traversal in __gc finali
             end
         end
 
+        do
+            local weak_refs = setmetatable({}, {__mode = "v"})
+            local co_abort_active = false
+            local co
+            co = coroutine.create(function()
+                local co_doc = simdjson.open(valid_json)
+                weak_refs.doc = co_doc
+                collectgarbage("stop")
+                local batch = {}
+                for i = 1, 200 do
+                    batch[i] = make_gc_canary(function()
+                        local target_co = weak_refs.co
+                        if target_co ~= nil then
+                            local reg = debug.getregistry()
+                            for k, v in pairs(reg) do
+                                if type(k) == "number" and v == target_co then
+                                    unexpected_errors = unexpected_errors + 1
+                                end
+                            end
+                        end
+                        if co_abort_active then
+                            co_abort_active = false
+                            error("abort co_doc from finalizer")
+                        end
+                    end)
+                end
+                batch = nil
+                co_abort_active = true
+                collectgarbage("restart")
+                return co_doc:atPointer("")
+            end)
+            weak_refs.co = co
+            coroutine.resume(co)
+            co_abort_active = false
+            co = nil
+            collectgarbage("collect")
+            collectgarbage("collect")
+            if weak_refs.co ~= nil or weak_refs.doc ~= nil then
+                unexpected_errors = unexpected_errors + 1
+            end
+        end
+
         tested.assert({expected = 0, actual = unexpected_errors})
         tested.assert({expected = true, actual = reentrant_rejected > 0})
         tested.assert({expected = true, actual = bad_reentrant_rejected > 0})
