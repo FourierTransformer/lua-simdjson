@@ -125,6 +125,10 @@ t:test("Make sure invalid files are not accepted", function()
         -- probably should check for specific errors being returned...
         tested.assert_truthy({actual=cjsonError, given=file, should="return an error message on failure"})
         tested.assert_truthy({actual=simdjsonError, given=file, should="return an error message on failure"})
+
+        local simdjsonFileValue, simdjsonFileError = pcall(function() simdjson.parseFile("jsonexamples/invalid/" .. file) end)
+        tested.assert({actual=simdjsonFileValue, expected=false, given=file, should="parseFile pcall should return false"})
+        tested.assert_truthy({actual=simdjsonFileError, given=file, should="parseFile should return an error message on failure"})
     end
 end)
 
